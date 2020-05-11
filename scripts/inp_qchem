@@ -1,0 +1,318 @@
+#!/bin/bash
+
+if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
+    echo "  "
+    echo "  Usage: $0 [Filename of Q-Chem input file]  jobtype  method  option"
+    echo " "
+    echo "  Creates a Q-Chem input file with some specifications"
+    echo "  Available jobtypes: sp | opt | ts | fsm | meci | meciloose  "
+    echo "  Available methods: hf | dft | sftddft | adc2 | eomccsd | rasci | asci "
+		echo "  "
+    echo "  Example:  $0 qchem.inp opt dft"
+    echo "  Example:  $0 ts.inp ts sftddft pcm" 
+    exit 
+fi
+
+if [[ -z $1 ]]; then
+  name="qchem.inp"
+else
+  name=$1
+fi
+
+echo '$comment' > $name
+echo "  Q-Chem input file" >> $name
+echo " 1. A line prefixed with an exclamation mark ‘!’ is treated as a comment and will be ignored by the program" >> $name
+echo ' 2. Variables are case-insensitive (as is the whole Q-CHEM input file).' >> $name
+echo '$end' >> $name
+echo "" >> $name
+
+
+
+echo '$molecule' >> $name
+echo "  READ geom" >> $name
+echo '$end' >> $name
+echo " " >> $name
+
+echo '$rem' >> $name
+echo " !--GENERAL Q-CHEM SETTINGS -----------------------------------------------------------------------" >> $name 
+echo "  MEM_TOTAL                 4500       ! maximum amount of ram memory (MB) " >> $name
+echo "  MEM_STATIC                1000       ! static memory used (MB)." >> $name
+echo "  AO2MO_DISK                50000      ! specifies maximum amount of memory written to scratch files (MB) " >> $name
+echo "  GUI                       2          ! 0: generate no checkpoint file | 2: generate fchk" >> $name
+echo " !-------------------------------------------------------------------------------------------------" >> $name
+echo "  " >> $name 
+echo " !--SCF PROCEDURE ---------------------------------------------------------------------------------" >> $name  
+echo "  SCF_ALGORITHM             DIIS       ! DIIS |DM | GDM | RCA | ROOTHAN | DIIS_GDM | DIIS_DM | RCA_DIIS"  >> $name
+echo "  SCF_CONVERGENCE           5          ! SCF is converged when energy change is below 1e-X hartree" >> $name
+echo "  SCF_MAX_CYCLES            150        ! controls the maximum number of scf iterations perimetted" >> $name
+echo "  SYMMETRY_IGNORE           true       ! control whether to use symmetry and reorienation of the molecule" >> $name
+echo " !-------------------------------------------------------------------------------------------------" >> $name
+echo "  " >> $name 	
+
+if [[ $2 == "sp" ]] || [[ -z $2 ]]; then
+	echo " !--SPECIFICATION OF JOBTYPE ----------------------------------------------------------------------" >> $name
+  echo "  JOBTYPE                   sp         ! sp: single point | opt: optimization | force | pes_scan | ts | .. " >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+	echo "  " >> $name 
+fi
+
+if [[ $2 == "opt" ]]; then
+	echo " !--SPECIFICATION OF JOBTYPE ----------------------------------------------------------------------" >> $name
+  echo "  JOBTYPE                   opt        ! sp: single point | opt: optimization | force | pes_scan | ts | .. " >> $name
+	echo "  GEOM_OPT_MAX_CYCLES       500        ! maximum number of optimization cycles" >> $name
+  echo "  GEOM_OPT_TOL_DISPLACEMENT 1200       ! convergence on maximum atomic displacement (in micro angs) " >> $name
+  echo "  GEOM_OPT_TOL_GRADIENT     300        ! convergence on maximum gradient component (x 1e-6)" >> $name
+  echo "  GEOM_OPT_TOL_ENERGY       100        ! convergence on energy change (x 1e-8)" >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+	echo "  " >> $name 
+fi
+
+if [[ $2 == "freq" ]]; then
+	echo " !--SPECIFICATION OF JOBTYPE ----------------------------------------------------------------------" >> $name
+  echo "  JOBTYPE                   freq       ! sp: single point | opt: optimization | force | pes_scan | ts | .. " >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+	echo "  " >> $name 
+fi
+
+
+if [[ $2 == "ts" ]]; then
+	echo "  " >> $name 
+	echo " !--SPECIFICATION OF JOBTYPE ----------------------------------------------------------------------" >> $name
+  echo "  JOBTYPE                   ts         ! sp: single point | opt: optimization | force | pes_scan | ts | .. " >> $name
+	echo "  MEM_TOTAL                 10000      ! maximum amount of ram memory (MB) " >> $name
+  echo "  GEOM_OPT_HESSIAN          read       ! determines the initial Hessian status. | diagonal | read " >> $name
+  echo "  GEOM_OPT_TOL_DISPLACEMENT 1200       ! convergence on maximum atomic displacement (in micro angs) " >> $name
+  echo "  GEOM_OPT_TOL_GRADIENT     300        ! convergence on maximum gradient component (x 1e-6)" >> $name
+  echo "  GEOM_OPT_TOL_ENERGY       100        ! convergence on energy change (x 1e-8)" >> $name
+	echo "  GEOM_OPT_MAX_CYCLES       500        ! maximum number of optimization cycles" >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+	echo "  " >> $name 
+fi
+
+if [[ $2 == "fsm" ]]; then
+	echo " !--SPECIFICATION OF JOBTYPE ----------------------------------------------------------------------" >> $name
+  echo "  JOBTYPE                   fsm        ! sp: single point | opt: optimization | force | pes_scan | ts | .. " >> $name
+  echo "  STATE_FOLLOW              1          ! whether to use state tracking procedure" >> $name
+  echo "  SET_STATE_REACTANT        1          ! specified excited state for freezing string method at the educt site " >> $name
+  echo "  SET_STATE_PRODUCT         1          ! specified excited state for fsm at the product site" >> $name
+  echo "  FSM_NNODE                 15         ! specifies the number of nodes along the string" >> $name
+  echo "  FSM_NGRAD                 4          ! specifies the number of perpendicular gradient steps used to optimize each node" >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+	echo "  " >> $name 
+fi
+
+
+if [[ $2 == "meci" ]]; then
+	echo " !--SPECIFICATION OF JOBTYPE ----------------------------------------------------------------------" >> $name
+  echo "  JOBTYPE                   opt        ! sp: single point | opt: optimization | force | pes_scan | ts | .. " >> $name
+	echo "  GEOM_OPT_MAX_CYCLES       500        ! maximum number of optimization cycles" >> $name
+  echo "  GEOM_OPT_TOL_DISPLACEMENT 1200       ! convergence on maximum atomic displacement (in micro angs) " >> $name
+  echo "  GEOM_OPT_TOL_GRADIENT     300        ! convergence on maximum gradient component (x 1e-6)" >> $name
+  echo "  GEOM_OPT_TOL_ENERGY       100        ! convergence on energy change (x 1e-8)" >> $name
+  echo "  MECP_OPT                  true       ! determines whether we are doing MECP optimizations" >> $name
+  echo "  MECP_METHODS    branching_plane      ! method to be use for mecp: branching_plane | penalty_function | mecp_direct" >> $name 
+  echo "  MECP_PROJ_HESS            true       ! determines whether to project out the coupling vector from the Hessian" >> $name
+  echo "  GEOM_OPT_COORDS           0          ! optimize in -1:internal, 0: cartesian, -2 zmatrix coordiantes" >> $name
+  echo "  MECP_STATE1               [0,1]      ! determines the second state for crossing [spin, excited state]  " >> $name
+  echo "  MECP_STATE2               [0,2]      ! as above. [0,1] will be S0 in SF-TDDFT " >> $name
+  echo "  CALC_NAC                  true       ! determines whether we are calculating non-adiabatic couplings" >> $name
+  echo "  CIS_DER_NUMSTATE          2          ! determines among how many states we calculate non-adiabatic couplings" >> $name
+  echo "  CIS_S2_THRESH             120        ! Determines whether a state is a singlet or triplet in unrestricted calculations" >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+	echo "  " >> $name 
+fi
+
+if [[ $2 == "meciloose" ]]; then
+	echo " !--SPECIFICATION OF JOBTYPE ----------------------------------------------------------------------" >> $name
+  echo "  JOBTYPE                   opt        ! sp: single point | opt: optimization | force | pes_scan | ts | .. " >> $name
+	echo "  GEOM_OPT_MAX_CYCLES       500        ! maximum number of optimization cycles" >> $name
+  echo "  GEOM_OPT_TOL_DISPLACEMENT 8000       ! convergence on maximum atomic displacement (in micro angs) " >> $name
+  echo "  GEOM_OPT_TOL_GRADIENT     8000       ! convergence on maximum gradient component (x 1e-6)" >> $name
+  echo "  GEOM_OPT_TOL_ENERGY       30000      ! convergence on energy change (x 1e-8)" >> $name
+  echo "  MECP_OPT                  true       ! determines whether we are doing MECP optimizations" >> $name
+  echo "  MECP_METHODS    branching_plane      ! method to be use for mecp: branching_plane | penalty_function | mecp_direct" >> $name 
+  echo "  MECP_PROJ_HESS            true       ! determines whether to project out the coupling vector from the Hessian" >> $name
+  echo "  GEOM_OPT_COORDS           0          ! optimize in -1:internal, 0: cartesian, -2 zmatrix coordiantes" >> $name
+  echo "  MECP_STATE1               [0,1]      ! determines the second state for crossing [spin, excited state]  " >> $name
+  echo "  MECP_STATE2               [0,2]      ! as above. [0,1] will be S0 in SF-TDDFT " >> $name
+  echo "  CALC_NAC                  true       ! determines whether we are calculating non-adiabatic couplings" >> $name
+  echo "  CIS_DER_NUMSTATE          2          ! determines among how many states we calculate non-adiabatic couplings" >> $name
+  echo "  CIS_S2_THRESH             120        ! Determines whether a state is a singlet or triplet in unrestricted calculations" >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+	echo "  " >> $name 
+fi
+
+if [[ $3 == "hf" ]]; then
+	echo " !--LEVEL OF THEORY -------------------------------------------------------------------------------" >> $name
+  echo "  EXCHANGE                  HF         ! specifies exchange level of theory" >> $name
+	echo "  BASIS                     def2-svp   ! specifies basis set to be used" >> $name
+  echo "  UNRESTRICTED              false      ! controls the use of restricted or unrestricted orbitals" >> $name
+  echo "  CIS_N_ROOTS               0          ! number of excited states to calculate within CIS/TDDFT" >> $name
+  echo "  CIS_STATE_DERIV           0          ! specifies the state of interest (grad, freq, opt) 1: 1st exc. state" >> $name
+  echo "  SET_ITER                  1500       ! number of maxmimum davidson iterations" >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+  echo '$end' >> $name
+fi
+
+if [[ $3 == "mp2" ]]; then
+        echo " !--LEVEL OF THEORY -------------------------------------------------------------------------------" >> $name
+  echo "  EXCHANGE                  HF         ! specifies exchange level of theory" >> $name
+  echo "  METHOD                    MP2        ! exact MP2 | other methods: rimp2, local_mp2" >> $name
+  echo "  BASIS                     def2-svp   ! specifies basis set to be used" >> $name
+  echo "  !AUX_BASIS                rimp2-cc-pvtz ! use auxiliary basis set for ri approximation" >> $name
+  echo "  UNRESTRICTED              false      ! controls the use of restricted or unrestricted orbitals" >> $name
+  echo "  SET_ITER                  1500       ! number of maxmimum davidson iterations" >> $name
+  echo " !-------------------------------------------------------------------------------------------------" >> $name
+  echo '$end' >> $name
+fi
+
+if [[ $3 == "dft" ]]; then
+	echo " !--LEVEL OF THEORY -------------------------------------------------------------------------------" >> $name
+  echo "  METHOD                    CAM-B3lYP  ! specifies exchange level of theory" >> $name
+  echo "  BASIS                     def2-svp   ! specifies basis set to be used" >> $name
+  echo "  UNRESTRICTED              false      ! controls the use of restricted or unrestricted orbitals" >> $name
+  echo "  CIS_N_ROOTS               0          ! number of excited states to calculate within CIS/TDDFT" >> $name
+  echo "  CIS_STATE_DERIV           0          ! specifies the state of interest (grad, freq, opt) 1: 1st exc. state" >> $name
+  echo "  CIS_SINGLETS              true       ! whether to calculate singlet excited states" >> $name 
+  echo "  CIS_TRIPLETS              false      ! whether to calculate tripletm excited states" >> $name
+  echo "  RPA                       0          ! 0: do TDDFT within TDA | 1: RPA in addition to CIS" >> $name
+  echo "  SET_ITER                  1500       ! number of maxmimum davidson iterations" >> $name
+  echo "  CIS_MOMENTS               false      ! whether to calculate state dipole moments in excited states" >> $name
+  echo "  STS_MOM                   false      ! whether to calculate transition moments between excited states" >> $name
+  echo " !-------------------------------------------------------------------------------------------------" >> $name
+  echo '$end' >> $name
+fi
+
+if [[ $3 == "sftddft" ]]; then
+	echo " !--LEVEL OF THEORY -------------------------------------------------------------------------------" >> $name
+  echo "  METHOD                    BHHLYP     ! specifies exchange level of theory" >> $name
+	echo "  BASIS                     def2-svp   ! specifies basis set to be used" >> $name
+  echo "  UNRESTRICTED              true       ! controls the use of restricted or unrestricted orbitals" >> $name
+  echo "  CIS_N_ROOTS               4          ! number of excited states to calculate within CIS/TDDFT" >> $name
+  echo "  CIS_STATE_DERIV           1          ! specifies the state of interest (grad, freq, opt) 1: 1st exc. state" >> $name
+  echo "  SET_ITER                  1500       ! number of maxmimum davidson iterations" >> $name
+  echo "  SPIN_FLIP                 1          ! 0: no spin flip | 1: perform spin-flip calculation. Multiplicity should be set to 3!" >> $name
+  echo "  WANG_ZIEGLER_KERNEL       false      ! whether to use non-collinear exchange-correlation kernel in SFDFT" >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+  echo '$end' >> $name
+fi
+
+if [[ $3 == "adc2" ]]; then
+	echo " !--LEVEL OF THEORY -------------------------------------------------------------------------------" >> $name
+  echo "  METHOD                    adc(2)     ! ADC(1) | ADC(2) | ADC(2)-x | ADC(3) | SOS-ADC(2) | SOS-ADC(2)-x | CVS-ADC..." >> $name
+  echo "  BASIS                     def2-svp   ! specifies basis set to be used" >> $name
+  echo "  CC_SYMMETRY               false      ! activates point-group symmetry in the ADC calculation.  ">> $name 
+  echo "  EE_SINGLETS               0          ! sets the number of singlet excited state roots to find" >> $name
+  echo "  ! EE_TRIPLETS             0          ! sets the number triplet excited state roots to find" >> $name 
+  echo "  ! SF_STATES               0          ! sets the number of spin-flip target states roots to find" >> $name
+  echo "  ADC_PROP_ES               false      ! controls the calculation of excited state properties (curr. only dipole moments)." >> $name
+  echo "  ADC_PROP_ES2ES            false      ! transition properties between excited states and two-photon absorption cross-sections" >> $name
+  echo "  ADC_PROP_TPA              false      ! two-photon absorption cross-sections of excited states using matrix inversion techniques. " >> $name
+  echo "  STATE_ANALYSIS            false      ! controls the analysis and export of excited state densities and orbitals" >> $name
+  echo "  ADC_DO_DIIS               true       ! do DIIS instead of Davidson for excited states. Default: false. but DIIS is faster" >> $name 
+  echo "  ADC_DIIS_START            1          ! controls the iteration step at which DIIS is turned on." >> $name 
+  echo "  ADC_DIIS_MAXITER          50         ! controls the maximum number of DIIS iterations." >> $name
+  echo "  ADC_DIIS_ECONV            6          ! controls the convergence criterion for the excited state energy during DIIS (1e-X)" >> $name
+  echo "  ADC_DAVIDSON_MAXITER      60         ! controls the maximum number of iterations of the Davidson procedure. " >> $name
+  echo "  ADC_DAVIDSON_CONV         6          ! controls the convergence criterion of the Davidson procedure. (1e-X) " >> $name
+  echo "  ADC_PRINT                 1          ! controls the amount of printing during an ADC calculation. |0:quit|1:basic|2:debug" >> $name
+  echo "  ADC_CVS                   false      ! use of the CVS approximation for the calculation of CVS-ADC core-excited states." >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+ echo '$end' >> $name
+fi
+
+if [[ $3 == "rasci" ]]; then
+	echo " !--LEVEL OF THEORY -------------------------------------------------------------------------------" >> $name
+  echo "  EXCHANGE                  HF         ! specifies exchange level of theory" >> $name
+  echo "  CORRELATION               RASCI      ! specifies correlation level of theory" >> $name
+  echo "  BASIS                     VDZ        ! specifies basis set to be used" >> $name
+  echo "  SET_ITER                  1500       ! sets the number of davidsion diagonalisation iterations" >> $name
+  echo "  RAS_ROOTS                 3          ! sets the number of RAS-CI roots to be computed" >> $name
+  echo "  RAS_ACT                   8          ! sets the number of orbitals in RAS2 (active orbitals)." >> $name
+  echo "  RAS_ELEC                  8          ! sets the number of electrons in RAS2 (active electrons)" >> $name
+  echo "  RAS_OCC                   110        ! sets the number of orbitals in RAS1 " >> $name
+  echo "  RAS_DO_HOLE               true       ! true: include hole configurations (RAS1 to RAS2 excitations) false: do not" >> $name
+  echo "  RAS_DO_PART               true       ! true: Include particle configurations (RAS2 to RAS3 excitations) false: do not" >> $name
+  echo "  RAS_AMPL_PRINT            10         ! defines the absolute threshold (* 1e2) for the CI amplitudes to be printed" >> $name
+  echo "  RAS_NATORB                true       ! controls the computation of the natural orbital occupation number." >> $name
+  echo "  RAS_NATORB_STATE          0          ! allows to save the natural orbitals of a RAS-CI computed state." >> $name
+  echo "  RAS_SPIN_MULT             1          ! specifies the spin multiplicity of the roots. 0: any, 1,2,3,4,5 for each mult." >> $name
+  echo "  RAS_PT2                   false      ! perform second-order perturbative correction to RAS-CI energy" >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+  echo '$end' >> $name
+fi
+
+if [[ $3 == "eomccsd" ]]; then
+	echo " !--LEVEL OF THEORY -------------------------------------------------------------------------------" >> $name
+  echo "  METHOD                    eom-ccsd   ! specifies that we perform a EOM-XX_CCSD calculation " >> $name
+  echo "  BASIS                     def2-svp   ! specifies basis set to be used" >> $name
+	echo "  !AUX_BASIS                           ! auxiliary basis set to be used. | rimp2-vdz | rimp2-tzvdpp | rimp2-cc-pvdz | ... | " >> $name
+  echo "  CC_SYMMETRY               false      ! activates point-group symmetry in the cc calculation" >> $name
+  echo "  CC_MEMORY                 3000       ! memory for block-tensors in ccman. default 50% of mem_total. should be 75% of total ram">> $name
+  echo "  CC_BACKEND                XM         ! specify the computational back-end of CCMAN2. use XM for large jobs with limited memory" >> $name
+  echo "  MEM_STATIC                1000       ! static memory used (MB)." >> $name
+  echo "  AO2MO_DISK                50000      ! specifies maximum amount of memory written to scratch files (MB) " >> $name
+  echo "  EOM_DAVIDSON_MAX_ITER     150        ! number of maxmimum davidson iterations" >> $name
+  echo "  !EE_STATES                0          ! number of excited state roots.|n: n states for each irrep| [n1,n2,..] n1 for irrep1..." >> $name
+  echo "  EE_SINGLETS               0          ! sets the number of singlet excited state roots to find. details see above" >> $name
+  echo "  !EE_TRIPLETS              0          ! sets the number triplet excited state roots to find. " >> $name
+  echo "  !SF_STATES                0          ! sets the number of spin-flip target states roots to find" >> $name
+  echo "  !IP_STATES                0          ! sets the number of ionized target states roots to find" >> $name
+  echo "  !EA_STATES                0          ! sets the number of attached target states roots to find">> $name
+  echo "  !DIP_STATES               0          ! sets the number of DIP roots to find." >> $name
+  echo "  EOM_USER_GUESS            false      ! if guess from eom_user_guess section will be used .only CCMAN2" >> $name
+  echo "  EOM_SHIFT                 0          ! speifies energy shift in EOM calculations. (1e-3 hartree) only CCMAN2" >> $name 
+  echo "  EOM_NGUESS_DOUBLES        0          ! specifies number of excited state guess vectors which are double excitations." >> $name
+  echo "  CC_EOM_PROP               false      ! specifies if target state properties are calculated" >> $name
+  echo "  CC_TRANS_PROP             0          ! specifies if trans dipole moment and osc strengt are calculated |1:ref -> eom|2: all pairs " >> $name
+  echo "  N_FROZEN_CORE             FC         ! number of frozen core orbitals in a post-Hartree–Fock calculation. |n: freeze n core orbitals" >> $name
+  echo "  CC_T_CONV                 4          ! CCSD amplitudes convergence criterion. (1e-x). Default: 8 energies, 10 gradients " >> $name
+  echo "  CC_E_CONV                 6          ! convergence desired on the change in total energy, between iterations. (1e-x). Default 10" >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+  echo '$end' >> $name
+fi
+
+
+if [[ $3 == "asci" ]]; then
+	echo " !--LEVEL OF THEORY -------------------------------------------------------------------------------" >> $name
+  echo "  EXCHANGE                  HF         ! specifies exchange level of theory" >> $name
+	echo "  BASIS                     VDZ        ! specifies basis set to be used" >> $name
+  echo "  CAS_METHOD                2          ! 1: CAS-CI, 2: CASSCF" >> $name
+  echo "  CAS_M_S                   0          ! M_s value*2 " >> $name
+  echo "  CAS_N_ELEC                48         ! number of active electrons" >> $name
+  echo "  CAS_N_ORB                 42         ! number of active orbitals"  >> $name
+  echo "  CAS_N_ROOTS               1          ! number of states to calculate" >> $name
+  echo "  CAS_SAVE_NAT_ORBS         0          ! whether to compute natural orbitals" >> $name
+  echo "  CAS_SOLVER                2          ! 1: CAS, 2: ASCI" >> $name
+  echo "  ASCI_NDETS                100000     ! number of determinants in wavefunction" >> $name
+  echo "  ASCI_USE_NAT_ORBS         1          ! use natural orbitals to improve conergency" >> $name
+  echo "  ASCI_DIAG                 2          ! 2: use sparse matrix eigensolver, 1: davidson iteration?" >> $name
+	echo " !-------------------------------------------------------------------------------------------------" >> $name
+  echo '$end' >> $name
+fi
+
+if [[ $4 == "pcm" ]]; then
+  head -n -1 $name > tmp 
+  cat tmp > $name
+  rm tmp
+  echo "  SOLVENT_METHOD            PCM        ! sets the preferred solvent method." >> $name
+  echo '$end' >> $name
+  echo "" >> $name
+  echo '$pcm' >> $name
+  echo "  Theory                    CPCM       ! specifies the which polarizable continuum model will be used. " >> $name
+  echo "  Method                    SWIG       ! specifies which surface discretization method will be used. " >> $name
+  echo "  SwitchThresh              8          ! discard grid points when the switching function is less than 1e-8" >> $name
+  echo "  Radii                     BONDI      ! spec. which set of atomic vdW radii will be used to define the solute cavity." >> $name
+  echo "  vdwScale                  1.2        ! scaling factor for the atomic vdW radii used to define the solute cavity." >> $name
+  echo "  SASradius                 0.0        ! Form a “solvent accessible” surface with the given solvent probe radius.(Angs)" >> $name
+  echo "  SurfaceType               VDW_SAS    ! Selects the solute cavity surface construction." >> $name 
+  echo "  !ChargeSeparation          None       ! Partition fast and slow charges in solvent equilibrium state: Marcus | Excited" >> $name
+  echo "  !StateSpecific             None       ! Specifies which the state-specific method will be used." >> $name
+  echo '$end' >> $name
+  echo " " >> $name
+  echo '$solvent' >> $name
+  echo "  Dielectric                8.93       ! sets the dieelectric constant of the solvent"  >> $name
+  echo "  OpticalDielectric         2.0280     ! The optical dielectric constant of the PCM solvent (n**2)" >> $name
+  echo '$end' >> $name
+fi
+

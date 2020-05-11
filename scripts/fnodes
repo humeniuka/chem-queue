@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+import subprocess
+import re
+
+class Node:
+    
+	def __init__(self, node_block):
+	    self.node_block = node_block
+	    self.name = "default_name"
+	    self.np_total = 0
+	    self.np_free = 0
+	    self.np_occ = 0
+	    self.status = "unknown"
+	    self.get_values()
+	    
+	def get_values(self):
+	    lines = re.split('\n', self.node_block)
+	    self.name = lines[0]
+	    self.status = lines[1].split()[2]
+	    self.np_total = int(lines[3].split()[2])
+	    for line in lines:
+		if "jobs =" in line: 
+	    	   line4 = line.split()
+	    	   try:
+	              jobs = line4[2].split(',')
+	              self.np_occ = len(jobs)
+	    	   except:
+	              print "All free"
+	              self.np_occ = 0
+	    self.np_free = self.np_total - self.np_occ
+	    
+class Nodes:
+    def __init__(self):
+        qnodes = subprocess.check_output(['qnodes'])
+        self.node_blocks = re.split('\n\n', qnodes)
+        self.nodes = []
+        
+    def parse_nodes(self):
+        for block in self.node_blocks:
+	    if len(block)>0:
+               self.nodes.append(Node(block))
+
+    def free_np(self):
+	print "{:10}{:15}{:>10}{:>10}{:>10}".format("Node","Status","# Free", "# Total", "# Occ")
+	for node in self.nodes:
+	    print "{:10}{:15}{:>10}{:>10}{:>10}".format(node.name, node.status, node.np_free, node.np_total, node.np_occ)
+
+    def free_np_value(self):
+	n = []
+	for node in self.nodes:
+	    n.append(node.np_free)
+	print n
+	return n
+
+info = Nodes()
+info.parse_nodes()
+info.free_np()
+#info.free_np_value()

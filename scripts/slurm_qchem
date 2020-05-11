@@ -1,0 +1,61 @@
+#!/bin/bash
+#
+# To submit a Q-Chem input file `water.in` to 4 processors
+# using 10Gb of memory run
+#
+#   run_qchem.sh  water.in  4   10Gb
+#
+
+if [ ! -f "$1" ]
+then
+    echo "Input script $1 does not exist!"
+    echo " "
+    echo "  Usage: $0  qchem.inp  nproc  mem  savename"
+    echo " "
+    echo "    submits Q-Chem script qchem.inp for calculation with 'nproc' processors"
+    echo "    and memory 'mem'. "
+    echo "  Example:  $0  qchem.inp 16  40Gb water"
+    exit 
+fi
+
+# input script
+job=$(readlink -f $1)
+name=$(basename $job .in)
+# number of processors (defaults to 1)
+nproc=${2:-1}
+# memory (defaults to 6Gb)
+mem=${3:-6}
+# directory where the input script resides, this were the output
+# will be written to as well.
+rundir=$(dirname $job)
+
+# The submit script is sent directly to stdin of qsub. Note
+# that all '$' signs have to be escaped ('\$') inside the HERE-document.
+sbatch <<EOF
+#!/bin/bash
+#SBATCH -p batch # partition (queue)
+#SBATCH -N 1  # number of nodes
+#SBATCH -n ${nproc} # number of cores
+#SBATCH --mem ${mem}000 # memory pool for all cores
+#SBATCH -t 00-100:00 # time (D-HH:MM)
+#SBATCH -o slurm.%N.%j.out # STDOUT
+#SBATCH -e slurm.%N.%j.err # STDERR
+#SBATCH --job-name=$1
+
+module load chem/qchem
+#export QCSCRATCH=/scratch/hochej/
+in=$job
+out=\$(basename \$in .in).out
+
+cd $rundir
+qchem -nt ${nproc} \$in \$out $4 > qchem_env_settings
+
+DATE=\$(date)
+echo ------------------------------------------------------
+echo End date: \$DATE
+echo ------------------------------------------------------
+
+EOF
+
+echo "submitting '$job' (using $nproc processors and $mem of memory)"
+
