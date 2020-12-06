@@ -24,7 +24,7 @@ state_of_interest = 1 # S0 = 0, S1 =1, ...
 nact = 8   # number of active orbitals
 
 atoms = np.loadtxt(geometry, skiprows=2, usecols=[0], dtype=str)
-electrons = {"H": 1, "C": 6, "N": 7, "O":  8, "S": 16}
+electrons = {"H": 1, "C": 6, "N": 7, "O":  8, "S": 16, "Zn": 30}
 nelec = np.sum([electrons[atom] for atom in atoms])
 nclosed = (nelec - nact) / 2  # number of closed orbitals
 

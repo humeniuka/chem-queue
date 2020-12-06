@@ -113,6 +113,7 @@ module load chem/bagel/latest
 # parallelization
 export BAGEL_NUM_THREADS=${nproc}
 export MKL_NUM_THREADS=${nproc}
+export I_MPI_SCALABLE_OPTIMIZATION=off
 
 # Input and log-file are not copied to the scratch directory.
 in=${job}
