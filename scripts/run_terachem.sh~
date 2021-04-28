@@ -1,25 +1,25 @@
 #!/bin/bash
 #
-# To submit a BAGEL input file `molecule.json` to 4 processors
+# To submit a TeraChem input file `molecule.inp` to 4 processors
 # using 10Gb of memory run
 #
-#   run_bagel.sh  molecule.json  4   10Gb
+#   run_terachem.sh  molecule.inp  4   10Gb
 #
 
 if [ ! -f "$1" ]
 then
     echo "Input script $1 does not exist!"
     echo " "
-    echo "  Usage: $(basename $0)  molecule.json  nproc  mem"
+    echo "  Usage: $(basename $0)  molecule.inp  nproc  mem"
     echo " "
-    echo "    submits BAGEL input molecule.json for calculation with 'nproc' processors"
+    echo "    submits TeraChem input molecule.inp for calculation with 'nproc' processors"
     echo "    and memory 'mem'. "
     echo " "
-    echo "    The BAGEL log-file is written to molecule.out in the same folder,"
+    echo "    The TeraChem log-file is written to molecule.out in the same folder,"
     echo "    whereas all other files are copied back from the node only after the calculation "
     echo "    has finished."
     echo " "
-    echo "  Example:  $(basename $0)  molecule.json 16  40Gb"
+    echo "  Example:  $(basename $0)  molecule.inp 16  40Gb"
     echo " "
     exit 
 fi
@@ -27,9 +27,9 @@ fi
 # input script
 job=$(readlink -f $1)
 # errors and output of submit script will be written to this file
-err=$(dirname $job)/$(basename $job .json).err
+err=$(dirname $job)/$(basename $job .inp).err
 # name of the job which is shown in the queueing table
-name=$(basename $job .json)
+name=$(basename $job .inp)
 # number of processors (defaults to 1)
 nproc=${2:-1}
 # memory (defaults to 6Gb)
@@ -54,69 +54,56 @@ done
 
 echo "submitting '$job' (using $nproc processors and $mem of memory)"
 
-# submit to PBS queue
-#qsub <<EOF
-# submit to slurm queue
+# submit to SLURM queue
 sbatch $options <<EOF
 #!/bin/bash
 
-# for Slurm
+## for Slurm
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
 #SBATCH --cpus-per-task=${nproc}
-#SBATCH --mem=${mem}
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem-per-gpu=${mem}
 #SBATCH --job-name=${name}
 #SBATCH --output=${err}
+## TeraChem requires a GPU
+#SBATCH --gres=gpu:2
+#SBATCH --gpus=2
+#SBATCH --time=01:00:00
 
-#NCPU=\$(wc -l < \$PBS_NODEFILE)
-NNODES=\$(uniq \$PBS_NODEFILE | wc -l)
 DATE=\$(date)
-SERVER=\$PBS_O_HOST
-SOURCEDIR=\${PBS_O_WORKDIR}
 
 echo ------------------------------------------------------
-echo PBS_O_HOST: \$PBS_O_HOST
-echo PBS_O_QUEUE: \$PBS_O_QUEUE
-echo PBS_QUEUE: \$PBS_O_QUEUE
-echo PBS_ENVIRONMENT: \$PBS_ENVIRONMENT
-echo PBS_O_HOME: \$PBS_O_HOME
-echo PBS_O_PATH: \$PBS_O_PATH
-echo PBS_JOBNAME: \$PBS_JOBNAME
-echo PBS_JOBID: \$PBS_JOBID
-echo PBS_ARRAYID: \$PBS_ARRAYID
-echo PBS_O_WORKDIR: \$PBS_O_WORKDIR
-echo PBS_NODEFILE: \$PBS_NODEFILE
-echo PBS_NUM_PPN: \$PBS_NUM_PPN
+echo SLURM_SUBMIT_HOST: \$SLURM_SUBMIT_HOST
+echo SLURM_JOB_NAME: \$SLURM_JOB_NAME
+echo SLURM_JOB_ID: \$SLURM_JOB_ID
+echo SLURM_SUBMIT_DIR: \$SLURM_SUBMIT_DIR
+echo SLURM_CPUS_ON_NODE: \$SLURM_CPUS_ON_NODE
 echo ------------------------------------------------------
-echo WORKDIR: \$WORKDIR
-echo SOURCEDIR: \$SOURCEDIR
-echo ------------------------------------------------------
-echo "This job is allocated on '\${NCPU}' cpu(s) on \$NNODES"
 echo "Job is running on node(s):"
-cat \$PBS_NODEFILE
+echo " \$SLURM_NODELIST "
+echo CUDA_VISIBLE_DEVICES: \$CUDA_VISIBLE_DEVICES
 echo ------------------------------------------------------
-echo Start date: \$DATE
+echo User        : \$USER
+echo Path        : \$PATH
+echo ------------------------------------------------------
+echo Start date  : \$DATE
 echo ------------------------------------------------------
 
 # Sometimes the module command is not available, load it.
 source /etc/profile.d/modules.sh
 
 # Here required modules are loaded and environment variables are set
-module load bagel
-
-# parallelization
-export BAGEL_NUM_THREADS=${nproc}
-export MKL_NUM_THREADS=${nproc}
+module load terachem/qmmm2epol
 
 # Input and log-file are not copied to the scratch directory.
 in=${job}
-out=\$(dirname \$in)/\$(basename \$in .json).out
+out=\$(dirname \$in)/\$(basename \$in .inp).out
 
 # Calculations are performed in the user's scratch 
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-tmp}
+tmpdir=\${SCRATCH:-/scratch}
 jobdir=\$tmpdir/\${SLURM_JOB_ID}
 
 mkdir -p \$jobdir
@@ -133,55 +120,45 @@ function clean_up() {
 
 trap clean_up SIGHUP SIGINT SIGTERM
 
-# BAGEL can load geometries, MO coefficients and other data from a binary
-# file specified via the keyword 
-#   "file": "/path/to/file"
-# If such a keyword is detected in the input and the file exists already,
-# it will be copied to the scratch folder on the compute node to make them 
-# available to BAGEL.
-for file in \$(grep "file" \$in | sed 's/"file"\\s*:\\s*//g' | sed 's/[\\",]//g')
+# TeraChem sometimes requires additional data in external files specified via keywords,
+# which have to be copied to the scratch folder on the compute node. We go through all
+# files in the current folder and check if they appear in the input file. If yes, they
+# are copied. 
+for file in *
 do
-    # The extension .archive have to be appended to the BAGEL file.
-    archive=\${file}.archive
-    if [ -f \$archive ]
+    required=\$(grep "\$file" \$in)
+    if [ ! "\$required" == "" ]
     then
-       echo "The job needs the restart file '\$archive' => copy it to scratch folder"
-       cp \$archive \$jobdir
-    fi
-done
-
-# Molden files can also be used for restarting via the keyword
-#   "molden_file" : "/path/to/molden/file"
-# They need to be copied to the scratch folder, too.
-for file in \$(grep "molden_file" \$in | sed 's/"molden_file"\\s*:\\s*//g' | sed 's/[\\",]//g')
-do
-    if [ -f \$file ]
-    then
-       echo "The job needs the restart file '\$file' => copy it to scratch folder"
+       echo "The job needs the file '\$file' => copy it to scratch folder"
        cp \$file \$jobdir
     fi
 done
 
 # Go to the scratch folder and run the calculations. Newly created
 # files are written to the scratch folder. The log-file is written
-# directly to $out (in the global filesystem).
+# directly to \$out (in the global filesystem).
 
 cd \$jobdir
 
 echo "Calculation is performed in the scratch folder"
 echo "   \$(hostname):\$jobdir"
 
-echo "Running BAGEL ..."
-srun --mpi=pmi2 BAGEL \$in &> \$out
+echo "NVIDIA-SMI"
+nvidia-smi
+
+echo "TeraChem executable: \$(which terachem)"
+
+echo "Running TeraChem ..."
+terachem \$in &> \$out
 
 # Did the job finish successfully ?
-failure=\$(tail -n 20 \$out | grep "ERROR")
+failure=\$(tail -n 20 \$out | grep "DIE called")
 if [ "\$failure" == "" ]
 then
-   echo "BAGEL job finished normally."
+   echo "TeraChem job finished normally."
    ret=0
 else
-   echo "BAGEL job failed, see \$out."
+   echo "TeraChem job failed, see \$out."
    ret=1
 fi
 
@@ -197,7 +174,7 @@ echo ------------------------------------------------------
 echo End date: \$DATE
 echo ------------------------------------------------------
 
-# Pass return value of BAGEL job on to the SLURM queue, this allows
+# Pass return value of TeraChem job on to the SLURM queue, this allows
 # to define conditional execution of dependent jobs based on the 
 # exit code of a previous job.
 echo "exit code = \$ret"

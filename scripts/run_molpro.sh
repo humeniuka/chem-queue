@@ -69,7 +69,6 @@ sbatch <<EOF
 #!/bin/bash
 
 # for Torque
-#PBS -q batch
 #PBS -l nodes=1:ppn=${nproc},vmem=${mem},mem=${mem}
 #PBS -N ${name}
 #PBS -jeo 
@@ -113,7 +112,7 @@ echo Start date: \$DATE
 echo ------------------------------------------------------
 
 # Here required modules are loaded and environment variables are set
-module load chem/molpro
+module load molpro
 
 # Input and log-file are not copied to the scratch directory.
 in=${job}
@@ -123,8 +122,8 @@ out=\$(dirname \$in)/\$(basename \$in .in).out
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=/scratch
-jobdir=\$tmpdir/\${PBS_JOBID}
+tmpdir=\${SCRATCH:-tmp}
+jobdir=\$tmpdir/\${SLURM_JOB_ID}
 
 mkdir -p \$jobdir
 
@@ -137,7 +136,7 @@ function clean_up() {
     # copy output files back
     mv \$jobdir/* $rundir/
     # delete temporary folder
-    rm -f \$tmpdir/\${PBS_JOBID}/*
+    rm -f \$tmpdir/\${SLURM_JOB_ID}/*
     exit
 }
 
