@@ -8,7 +8,7 @@
 if [ $# == 0 ]
 then
     echo " "
-    echo "  Usage: $0  command  nproc  mem"
+    echo "  Usage: $(basename $0)  command  nproc  mem"
     echo " "
     echo "    submits a command (enclosed in quotation marks) to the queue with 'nproc' processors"
     echo "    and memory 'mem'. "
@@ -43,55 +43,37 @@ mem=${3:-6Gb}
 sbatch <<EOF
 #!/bin/bash
 
-# for Torque
-#PBS -q batch
-#PBS -l nodes=1:ppn=${nproc},vmem=${mem},mem=${mem}
-#PBS -N ${name}
-#PBS -jeo 
-#PBS -e ${out} 
-
 # for Slurm
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=${nproc}
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=${nproc}
 #SBATCH --mem=${mem}
 #SBATCH --job-name=${name}
 #SBATCH --output=${out}
 
-#NCPU=\$(wc -l < \$PBS_NODEFILE)
-NNODES=\$(uniq \$PBS_NODEFILE | wc -l)
-DATE=\$(date)
-SERVER=\$PBS_O_HOST
-SOURCEDIR=\${PBS_O_WORKDIR}
-
 echo ------------------------------------------------------
-echo PBS_O_HOST: \$PBS_O_HOST
-echo PBS_O_QUEUE: \$PBS_O_QUEUE
-echo PBS_QUEUE: \$PBS_O_QUEUE
-echo PBS_ENVIRONMENT: \$PBS_ENVIRONMENT
-echo PBS_O_HOME: \$PBS_O_HOME
-echo PBS_O_PATH: \$PBS_O_PATH
-echo PBS_JOBNAME: \$PBS_JOBNAME
-echo PBS_JOBID: \$PBS_JOBID
-echo PBS_ARRAYID: \$PBS_ARRAYID
-echo PBS_O_WORKDIR: \$PBS_O_WORKDIR
-echo PBS_NODEFILE: \$PBS_NODEFILE
-echo PBS_NUM_PPN: \$PBS_NUM_PPN
+echo SLURM_SUBMIT_HOST: \$SLURM_SUBMIT_HOST
+echo SLURM_JOB_NAME: \$SLURM_JOB_NAME
+echo SLURM_JOB_ID: \$SLURM_JOB_ID
+echo SLURM_SUBMIT_DIR: \$SLURM_SUBMIT_DIR
+echo SLURM_CPUS_ON_NODE: \$SLURM_CPUS_ON_NODE
 echo ------------------------------------------------------
-echo WORKDIR: \$WORKDIR
-echo SOURCEDIR: \$SOURCEDIR
-echo HOSTNAME: \$(hostname)
-echo ------------------------------------------------------
-echo "This job is allocated on '\${NCPU}' cpu(s) on \$NNODES"
 echo "Job is running on node(s):"
-cat \$PBS_NODEFILE
+echo " \$SLURM_NODELIST "
 echo ------------------------------------------------------
-echo Start date: \$DATE
+echo User        : \$USER
+echo Path        : \$PATH
 echo ------------------------------------------------------
+echo Start date  : \$DATE
+echo ------------------------------------------------------
+
+# Sometimes the module command is not available, load it.
+source /etc/profile.d/modules.sh
 
 # Here required modules are loaded and environment variables are set
-module load dftbaby
+export PYTHONUNBUFFERED=1
 
-cd \$PBS_O_WORKDIR
+cd \$SLURM_SUBMIT_DIR
 
 echo "Running command '$cmd'"
 echo "   ##### START #####"

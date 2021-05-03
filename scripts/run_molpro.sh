@@ -51,7 +51,7 @@ units2words={'k': 1000/8, 'm': 10**6/8, 'g': 10**9/8, 't': 10**12/8}
 # Apparently Molpro uses more memory than allowed. We divide the
 # allocated memory by 2, so that the job is not killed by the queue.
 mem_words=(int(numbers) * units2words[units])/(2*nproc)
-print mem_words
+print(int(mem_words))
 EOF
 )
 
