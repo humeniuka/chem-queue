@@ -51,6 +51,10 @@ sbatch <<EOF
 #SBATCH --job-name=${name}
 #SBATCH --output=${out}
 
+# If the executable is in the submission directory, we want to be able
+# to call it without the ./ prefix.
+export PATH="\$SLURM_SUBMIT_DIR:\$PATH"
+
 echo ------------------------------------------------------
 echo SLURM_SUBMIT_HOST: \$SLURM_SUBMIT_HOST
 echo SLURM_JOB_NAME: \$SLURM_JOB_NAME
