@@ -84,13 +84,6 @@ echo "submitting '$job' (using $nproc processors and $mem of memory)"
 sbatch $options <<EOF
 #!/bin/bash
 
-# for Torque
-#PBS -q batch
-#PBS -l nodes=1:ppn=${nproc},vmem=${mem},mem=${mem}
-#PBS -N ${name}
-#PBS -jeo 
-#PBS -e ${err} 
-
 # for Slurm
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=${nproc}

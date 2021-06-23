@@ -1,10 +1,14 @@
 #!/bin/bash
 #
+# Use NVIDIA's nvprof to profile TeraChem and create a timeline
+# which can be inspected with NVIDIA's visual profiler nvvp.
+#
 # To submit a TeraChem input file `molecule.inp` to 2 GPUs
 # using 6Gb of memory per GPU run
 #
-#   run_terachem.sh  molecule.inp   2   6Gb
+#   profile_terachem.sh  molecule.inp   2   6Gb
 #
+# The timeline is saved to the file `log.nvprof`
 
 if [ ! -f "$1" ]
 then
@@ -113,7 +117,7 @@ mkdir -p \$jobdir
 
 function clean_up() {
     # copy all files back
-    cp -rf \$jobdir/* $rundir/
+    mv \$jobdir/* $rundir/
     # delete temporary folder
     rm -f \$tmpdir/\${SLURM_JOB_ID}/*
 }
@@ -145,8 +149,8 @@ echo "   \$(hostname):\$jobdir"
 
 echo "TeraChem executable: \$(which terachem)"
 
-echo "Running TeraChem ..."
-terachem \$in &> \$out
+echo "Profiling TeraChem ..."
+nvprof -fo log.nvprof terachem \$in &> \$out
 
 # Did the job finish successfully ?
 failure=\$(tail -n 20 \$out | grep "DIE called")
