@@ -32,8 +32,8 @@ err=$(dirname $job)/$(basename $job .inp).err
 name=$(basename $job .inp)
 # number of processors (defaults to 1)
 ngpu=${2:-1}
-# memory (defaults to 6Gb)
-mem=${3:-6Gb}
+# memory (defaults to 48Gb)
+mem=${3:-48Gb}
 # directory where the input script resides, this were the output
 # will be written to as well.
 rundir=$(dirname $job)
@@ -62,13 +62,14 @@ sbatch $options <<EOF
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${ngpu}
 #SBATCH --ntasks-per-node=1
-#SBATCH --mem-per-gpu=${mem}
+##SBATCH --mem-per-gpu=${mem}
+#SBATCH --mem-per-cpu=${mem}
 #SBATCH --job-name=${name}
 #SBATCH --output=${err}
 ## TeraChem requires a GPU
 #SBATCH --gres=gpu:${ngpu}
 #SBATCH --gpus=${ngpu}
-#SBATCH --time=01:00:00
+#SBATCH --time=48:00:00
 
 DATE=\$(date)
 
