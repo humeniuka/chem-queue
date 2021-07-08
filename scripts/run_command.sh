@@ -34,13 +34,24 @@ nproc=${2:-1}
 # memory (defaults to 6Gb)
 mem=${3:-6Gb}
 
+# All options (arguments starting with --) are extracted from the command
+# line and are passed on to sbatch.
+options=""
+for var in "$@"
+do
+    if [ "$(echo $var | grep "^--")" != "" ]
+    then
+	options="$options $var"
+    fi
+done
+
 # The submit script is sent directly to stdin of qsub. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
 
 # submit to PBS queue
 #qsub <<EOF
 # submit to slurm queue
-sbatch <<EOF
+sbatch $options <<EOF
 #!/bin/bash
 
 # for Slurm
