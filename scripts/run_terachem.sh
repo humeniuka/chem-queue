@@ -94,7 +94,7 @@ echo ------------------------------------------------------
 source /etc/profile.d/modules.sh
 
 # Here required modules are loaded and environment variables are set
-module load terachem/qmmm2epol
+#module load terachem/qmmm2epol
 
 # Input and log-file are not copied to the scratch directory.
 in=${job}
@@ -130,8 +130,8 @@ do
     required=\$(grep "\$file" \$in)
     if [ ! "\$required" == "" ]
     then
-       echo "The job needs the file '\$file' => copy it to scratch folder"
-       cp \$file \$jobdir
+       echo "The job needs the file or directory '\$file' => copy it to scratch folder"
+       cp -r \$file \$jobdir
     fi
 done
 
