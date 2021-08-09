@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
-import numpy as np
+import numpy
 import json
 
 import sys
@@ -17,17 +17,17 @@ def readXYZ(filename):
             if len(tmp)==4: 
                 atom = OrderedDict()
                 atom["atom"] = tmp[0]
-                atom["xyz"] = map(float,tmp[1:])
+                atom["xyz"] = list(map(float,tmp[1:]))
                 geom.append(atom)
     return geom
 
 if len(sys.argv) < 4:
-    print "Usage: %s  template.json  molecule.xyz  molecule.json" % os.path.basename(sys.argv[0])
-    print " "
-    print "  create JSON input file for BAGEL"
-    print "  All sections are copied from 'template.json' except for the molecule"
-    print "  section, which is taken from 'molecule.xyz'."
-    print " "
+    print( "Usage: %s  template.json  molecule.xyz  molecule.json" % os.path.basename(sys.argv[0]) )
+    print( " " )
+    print( "  create JSON input file for BAGEL" )
+    print( "  All sections are copied from 'template.json' except for the molecule" )
+    print( "  section, which is taken from 'molecule.xyz'." )
+    print( " " )
     exit(-1)
 
 args = sys.argv[1:]
@@ -69,7 +69,7 @@ def to_json(o, level=0, nflag=0):
             ret += "{" + NEWLINE
 
         comma = ""
-        for k,v in o.iteritems():
+        for k,v in o.items():
             ret += comma
             if k == "atom":
                 comma = ","
@@ -84,7 +84,7 @@ def to_json(o, level=0, nflag=0):
         else:
             nflag = 0
             ret += NEWLINE + SPACE * INDENT * level + "}"
-    elif isinstance(o, basestring):
+    elif isinstance(o, str):
         ret += '"' + o + '"'
     elif isinstance(o, list):
         ret += "[" + ",".join([to_json(e, level+1) for e in o]) + "]"
