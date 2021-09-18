@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
+import numpy
 import numpy as np
 
 import sys
 import os.path
 
 if len(sys.argv) < 3:
-    print ""
-    print "Usage: %s  molecule.xyz  molecule.json" % os.path.basename(sys.argv[0])
-    print "  create JSON input file for BAGEL"
-    print ""
+    print( "" )
+    print( "Usage: %s  molecule.xyz  molecule.json" % os.path.basename(sys.argv[0]) )
+    print( "  create JSON input file for BAGEL" )
+    print( "" )
     exit(-1)
 
 geometry = sys.argv[1]
@@ -38,7 +39,7 @@ def readXYZ(filename):
             if len(tmp)==4: 
                 atom = OrderedDict()
                 atom["atom"] = tmp[0]
-                atom["xyz"] = map(float,tmp[1:])
+                atom["xyz"] = list(map(float,tmp[1:]))
                 geom.append(atom)
     return geom
 
@@ -98,7 +99,7 @@ def to_json(o, level=0, nflag=0):
             ret += "{" + NEWLINE
 
         comma = ""
-        for k,v in o.iteritems():
+        for k,v in o.items():
             ret += comma
             if k == "atom":
                 comma = ","
@@ -113,7 +114,7 @@ def to_json(o, level=0, nflag=0):
         else:
             nflag = 0
             ret += NEWLINE + SPACE * INDENT * level + "}"
-    elif isinstance(o, basestring):
+    elif isinstance(o, str):
         ret += '"' + o + '"'
     elif isinstance(o, list):
         ret += "[" + ",".join([to_json(e, level+1) for e in o]) + "]"

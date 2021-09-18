@@ -52,7 +52,7 @@ done
 # The submit script is sent directly to stdin of qsub. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
 
-echo "submitting '$job' (using $ngpu GPUs and $mem of memory)"
+>&2 echo "submitting '$job' (using $ngpu GPUs and $mem of memory)"
 
 # submit to SLURM queue
 sbatch $options <<EOF
@@ -131,7 +131,13 @@ do
     if [ ! "\$required" == "" ]
     then
        echo "The job needs the file or directory '\$file' => copy it to scratch folder"
-       cp -r \$file \$jobdir
+       if [ -L "\$file" ] && [ -f "\$file" ] 
+       then
+          # If file is a symbolic link, copy the file not the link
+          cp \$file \$jobdir
+       else
+          cp -r \$file \$jobdir
+       fi
     fi
 done
 
@@ -140,6 +146,11 @@ done
 # directly to \$out (in the global filesystem).
 
 cd \$jobdir
+
+### DEBUG
+echo "Files in scratch folder:"
+ls -ltah *
+###
 
 echo "Calculation is performed in the scratch folder"
 echo "   \$(hostname):\$jobdir"

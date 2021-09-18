@@ -78,16 +78,10 @@ echo "submitting '$job' (using $nproc processors and $mem of memory)"
 sbatch $sbatch_options <<EOF
 #!/bin/bash
 
-# for Torque
-#PBS -q batch
-#PBS -l nodes=1:ppn=${nproc},vmem=${mem},mem=${mem}
-#PBS -N ${name}
-#PBS -jeo 
-#PBS -e ${err} 
-
 # for Slurm
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=${nproc}
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=${nproc}
 #SBATCH --mem=${mem}
 #SBATCH --job-name=${name}
 #SBATCH --output=${err}
@@ -125,12 +119,19 @@ echo ------------------------------------------------------
 # In case module command is not available
 source /etc/profile.d/modules.sh
 
-module load chem/qchem
+# Here required modules are loaded and environment variables are set
+module load qchem
 
-jobdir=/scratch/\${PBS_JOBID}
+# Calculations are performed in the user's scratch 
+# directory. For each job a directory is created
+# whose contents are later moved back to the server.
+
+tmpdir=\${SCRATCH:-tmp}
+jobdir=\$tmpdir/\${SLURM_JOB_ID}
+
 # scratch folder on compute node
 export QCSCRATCH=\${jobdir}
-export QCLOCALSCR=\${jobdir}
+export QCTMPDIR=\${jobdir}
 
 mkdir -p \$jobdir
 
@@ -141,7 +142,7 @@ function clean_up() {
     # move checkpoint files back
     mv \$jobdir/* $rundir/
     # delete temporary folder
-    rm -f /scratch/\${PBS_JOBID}/*
+    rm -f \$tmpdir/\${SLURM_JOB_ID}/*
 }
 
 trap clean_up SIGHUP SIGINT SIGTERM
