@@ -1,10 +1,16 @@
 #!/bin/bash
 #
+# Use NVIDIA's cuda-memcheck to detect out-of-bounds errors and access to
+# unitialized data in TeraChem. The error messages are written to:
+#  - memcheck.out
+#  - initcheck.out 
+#
 # To submit a TeraChem input file `molecule.inp` to 2 GPUs
 # using 6Gb of memory per GPU run
 #
-#   run_terachem.sh  molecule.inp   2   6Gb
+#   profile_terachem.sh  molecule.inp   2   6Gb
 #
+# The timeline is saved to the file `log.nvprof`
 
 if [ ! -f "$1" ]
 then
@@ -32,8 +38,8 @@ err=$(dirname $job)/$(basename $job .inp).err
 name=$(basename $job .inp)
 # number of processors (defaults to 1)
 ngpu=${2:-1}
-# memory (defaults to 48Gb)
-mem=${3:-48Gb}
+# memory (defaults to 6Gb)
+mem=${3:-6Gb}
 # directory where the input script resides, this were the output
 # will be written to as well.
 rundir=$(dirname $job)
@@ -52,7 +58,7 @@ done
 # The submit script is sent directly to stdin of qsub. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
 
->&2 echo "submitting '$job' (using $ngpu GPUs and $mem of memory)"
+echo "submitting '$job' (using $ngpu GPUs and $mem of memory)"
 
 # submit to SLURM queue
 sbatch $options <<EOF
@@ -62,14 +68,13 @@ sbatch $options <<EOF
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${ngpu}
 #SBATCH --ntasks-per-node=1
-##SBATCH --mem-per-gpu=${mem}
-##SBATCH --mem-per-cpu=${mem}
+#SBATCH --mem-per-gpu=${mem}
 #SBATCH --job-name=${name}
 #SBATCH --output=${err}
 ## TeraChem requires a GPU
 #SBATCH --gres=gpu:${ngpu}
-##SBATCH --gpus=${ngpu}
-#SBATCH --time=48:00:00
+#SBATCH --gpus=${ngpu}
+#SBATCH --time=01:00:00
 
 DATE=\$(date)
 
@@ -94,7 +99,7 @@ echo ------------------------------------------------------
 source /etc/profile.d/modules.sh
 
 # Here required modules are loaded and environment variables are set
-#module load terachem/qmmm2epol
+module load terachem/qmmm2epol
 
 # Input and log-file are not copied to the scratch directory.
 in=${job}
@@ -114,7 +119,7 @@ mkdir -p \$jobdir
 
 function clean_up() {
     # copy all files back
-    cp -rf \$jobdir/* $rundir/
+    mv \$jobdir/* $rundir/
     # delete temporary folder
     rm -f \$tmpdir/\${SLURM_JOB_ID}/*
 }
@@ -147,18 +152,19 @@ done
 
 cd \$jobdir
 
-### DEBUG
-echo "Files in scratch folder:"
-ls -ltah *
-###
-
 echo "Calculation is performed in the scratch folder"
 echo "   \$(hostname):\$jobdir"
 
 echo "TeraChem executable: \$(which terachem)"
 
-echo "Running TeraChem ..."
-terachem \$in &> \$out
+echo "== Checking memory access in TeraChem ... =="
+cuda-memcheck --log-file memcheck.out  --tool memcheck   --  terachem \$in &> \$out
+echo "== Checking for access to unitialized memory in TeraChem ... =="
+cuda-memcheck --log-file initcheck.out  --tool initcheck   --  terachem \$in &> \$out
+echo "== Checking for race conditions in TeraChem ... =="
+cuda-memcheck --log-file racecheck.out  --tool racecheck   --  terachem \$in &> \$out
+echo "== Checking for synchronization errors in TeraChem ... =="
+cuda-memcheck --log-file synccheck.out  --tool synccheck   --  terachem \$in &> \$out
 
 # Did the job finish successfully ?
 failure=\$(tail -n 20 \$out | grep "DIE called")
