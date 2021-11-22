@@ -63,7 +63,7 @@ def to_json(o, level=0, nflag=0):
     ret = ""
 
     if isinstance(o, dict):
-        if len(o) == 2:
+        if len(o) == 2 and "atom" in o:
             ret += NEWLINE + SPACE * INDENT * (level+1) + "{"
         else:
             ret += "{" + NEWLINE
