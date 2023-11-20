@@ -1,14 +1,14 @@
 #!/bin/bash
 #
 # To submit a Gaussian input file `molecule.gjf` to 4 processors
-# using 10Gb of memory run
+# using 10G of memory run
 #
-#   run_gaussian.sh  molecule.gjf  4   10Gb
+#   run_gaussian.sh  molecule.gjf  4   10G
 #
 # To submit to a specifiy SLURM queue you can set the environment variable
 # SBATCH_PARTITION before executing this script, e.g.
 #
-#   SBATCH_PARTITION=fux  run_gaussian.sh molecule.gjf 4 10Gb
+#   SBATCH_PARTITION=fux  run_gaussian.sh molecule.gjf 4 10G
 #
 
 show_help() {
@@ -26,7 +26,7 @@ show_help() {
     echo "    In the Gaussian script '%Nproc=...' should be omitted, but the amount of memory still has"
     echo "    to be specified via '%Mem=...'' ."
     echo " "
-    echo "  Example:  $(basename $0)  molecule.gjf 16  40Gb"
+    echo "  Example:  $(basename $0)  molecule.gjf 16  40G"
     echo " "
     exit 1
 }
@@ -65,10 +65,10 @@ job=$(readlink -f $1)
 err=$(dirname $job)/$(basename $job .gjf).err
 # name of the job which is shown in the queueing table
 name=$(basename $job .gjf)
-# number of processors (defaults to 1)
-nproc=${2:-1}
-# memory (defaults to 6Gb)
-mem=${3:-6Gb}
+# number of cores (defaults to 1)
+ncore=${2:-1}
+# memory (defaults to 2G)
+mem=${3:-2G}
 # directory where the input script resides, this were the output
 # will be written to as well.
 rundir=$(dirname $job)
@@ -76,7 +76,7 @@ rundir=$(dirname $job)
 # The submit script is sent directly to stdin of qsub. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
 
-echo "submitting '$job' (using $nproc processors and $mem of memory)"
+echo "submitting '$job' (using $ncore cores and $mem of memory)"
 
 # submit to PBS queue
 #qsub <<EOF
@@ -84,45 +84,48 @@ echo "submitting '$job' (using $nproc processors and $mem of memory)"
 sbatch $options <<EOF
 #!/bin/bash
 
-# for Slurm
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=${nproc}
-#SBATCH --mem=${mem}
+# ===== SLURM options ======
+# Specify job queue (partition)
+##SBATCH -p ${SBATCH_PARTITION:-eb}
+# Request resources
+# see https://web.kudpc.kyoto-u.ac.jp/manual/en/run/resource
+#SBATCH --rsc p=1:c=${ncore}:t=$(expr ${ncore} \* 2):m=${mem}
+
 #SBATCH --job-name=${name}
+#SBATCH --error=${err}
 #SBATCH --output=${err}
+# ==========================
 
-#NCPU=\$(wc -l < \$PBS_NODEFILE)
-NNODES=\$(uniq \$PBS_NODEFILE | wc -l)
+echo "----- SLURM environment variables ------------------------------------------------------"
+echo "number of Cores/Node: \$SLURM_CPUS_ON_NODE"
+echo "number of Physical cores per task: \$SLURM_DPC_CPUS"
+echo "number of Logical cores per task (twice the value of the physical core): \$SLURM_CPUS_PER_TASK"
+echo "Job ID: \$SLURM_JOB_ID"
+echo "Parent job ID when executing array job: \$SLURM_ARRAY_JOB_ID"
+echo "Task ID when executing array job: \$SLURM_ARRAY_TASK_ID"
+echo "Job name: \$SLURM_JOB_NAME"
+echo "Name of nodes allocated to the job: \$SLURM_JOB_NODELIST"
+echo "Number of nodes allocated to the job: \$SLURM_JOB_NUM_NODES"
+echo "Index of executing node in node: \$SLURM_LOCALID"
+echo "Index relative to the node allocated to the job: \$SLURM_NODEID"
+echo "Number of processes for the job: \$SLURM_NTASKS"
+echo "Index of tasks for the job: \$SLURM_PROCID"
+echo "Submit directory: \$SLURM_SUBMIT_DIR"
+echo "Source host: \$SLURM_SUBMIT_HOST"
+echo "--------------------------------------------------------------------------------------"
+
+# Keep track of the execution progress of the job script.
+set -x
+
 DATE=\$(date)
-SERVER=\$PBS_O_HOST
-SOURCEDIR=\${PBS_O_WORKDIR}
 
-echo ------------------------------------------------------
-echo PBS_O_HOST: \$PBS_O_HOST
-echo PBS_O_QUEUE: \$PBS_O_QUEUE
-echo PBS_QUEUE: \$PBS_O_QUEUE
-echo PBS_ENVIRONMENT: \$PBS_ENVIRONMENT
-echo PBS_O_HOME: \$PBS_O_HOME
-echo PBS_O_PATH: \$PBS_O_PATH
-echo PBS_JOBNAME: \$PBS_JOBNAME
-echo PBS_JOBID: \$PBS_JOBID
-echo PBS_ARRAYID: \$PBS_ARRAYID
-echo PBS_O_WORKDIR: \$PBS_O_WORKDIR
-echo PBS_NODEFILE: \$PBS_NODEFILE
-echo PBS_NUM_PPN: \$PBS_NUM_PPN
-echo ------------------------------------------------------
-echo WORKDIR: \$WORKDIR
-echo SOURCEDIR: \$SOURCEDIR
-echo ------------------------------------------------------
-echo "This job is allocated on '\${NCPU}' cpu(s) on \$NNODES"
-echo "Job is running on node(s):"
-cat \$PBS_NODEFILE
 echo ------------------------------------------------------
 echo Start date: \$DATE
 echo ------------------------------------------------------
 
+
 # Here required modules are loaded and environment variables are set
-module load gaussian
+module load gaussian16
 
 # Input and log-file are not copied to the scratch directory.
 in=${job}
@@ -187,7 +190,7 @@ echo "Calculation is performed in the scratch folder"
 echo "   \$(hostname):\$jobdir"
 
 echo "Running Gaussian ..."
-g16 -p=${nproc} < \$in &> \$out
+srun g16 -p=${ncore} < \$in &> \$out
 
 # Did the job finish successfully ?
 success=\$(tail -n 1 \$out | grep "Normal termination of Gaussian")
@@ -205,7 +208,6 @@ fi
 echo "Copying results back ..."
 
 clean_up
-
 
 DATE=\$(date)
 echo ------------------------------------------------------
