@@ -27,7 +27,7 @@ nact = 8   # number of active orbitals
 atoms = np.loadtxt(geometry, skiprows=2, usecols=[0], dtype=str)
 electrons = {"H": 1, "C": 6, "N": 7, "O":  8, "S": 16, "Zn": 30}
 nelec = np.sum([electrons[atom] for atom in atoms])
-nclosed = (nelec - nact) / 2  # number of closed orbitals
+nclosed = int((nelec - nact) // 2)  # number of closed orbitals
 
 def readXYZ(filename):
     # read molecular coordinates from .xyz file
@@ -82,7 +82,8 @@ save_sec["title"] = "save_ref"
 save_sec["file"] = "mo_coeff"
 
 input_sec = OrderedDict()
-input_sec["bagel"] = [molecule_sec, read_sec, job_sec, print_sec, save_sec]
+#input_sec["bagel"] = [molecule_sec, read_sec, job_sec, print_sec, save_sec]
+input_sec["bagel"] = [molecule_sec, job_sec, print_sec, save_sec]
             
 
 INDENT = 2

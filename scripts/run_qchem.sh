@@ -3,12 +3,12 @@
 # To submit a Q-Chem input file `water.in` to 4 processors
 # using 10Gb of memory run
 #
-#   run_qchem.sh  water.in  4   10Gb
+#   run_qchem.sh  water.in  4   10G
 #
 # To submit to a specifiy SLURM queue you can set the environment variable
 # SBATCH_PARTITION before executing this script, e.g.
 #
-#   SBATCH_PARTITION=fux  run_qchem.sh molecule.gjf 4 10Gb
+#   SBATCH_PARTITION=fux  run_qchem.sh molecule.gjf 4 10G
 #
 
 show_help() {
@@ -19,7 +19,7 @@ show_help() {
     echo "    submits Q-Chem script qchem.in for calculation with 'nproc' processors"
     echo "    and memory 'mem'. "
     echo " "
-    echo "  Example:  $(basename $0)  qchem.in 16  40Gb"
+    echo "  Example:  $(basename $0)  qchem.in 16  40G"
     echo " "
     exit 1
 }
@@ -62,8 +62,8 @@ err=$(dirname $job)/$(basename $job .in).err
 name=$(basename $job .in)
 # number of processors (defaults to 1)
 nproc=${2:-1}
-# memory (defaults to 6Gb)
-mem=${3:-6Gb}
+# memory (defaults to 6G)
+mem=${3:-6G}
 # directory where the input script resides, this were the output
 # will be written to as well.
 rundir=$(dirname $job)
@@ -72,13 +72,13 @@ echo "submitting '$job' (using $nproc processors and $mem of memory)"
 
 # The submit script is sent directly to stdin of qsub. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
-# submit to PBS queue
-#qsub <<EOF
 # submit to slurm queue
 sbatch $sbatch_options <<EOF
 #!/bin/bash
 
 # for Slurm
+## QChem is only installed on bukka-calc
+#SBATCH --nodelist=bukka-calc
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=${nproc}
@@ -86,47 +86,41 @@ sbatch $sbatch_options <<EOF
 #SBATCH --job-name=${name}
 #SBATCH --output=${err}
 
-#NCPU=\$(wc -l < \$PBS_NODEFILE)
-NNODES=\$(uniq \$PBS_NODEFILE | wc -l)
-DATE=\$(date)
-SERVER=\$PBS_O_HOST
-SOURCEDIR=\${PBS_O_WORKDIR}
+echo "----- SLURM environment variables ------------------------------------------------------"
+echo "number of Cores/Node: \$SLURM_CPUS_ON_NODE"
+echo "number of Physical cores per task: \$SLURM_DPC_CPUS"
+echo "number of Logical cores per task (twice the value of the physical core): \$SLURM_CPUS_PER_TASK"
+echo "Job ID: \$SLURM_JOB_ID"
+echo "Parent job ID when executing array job: \$SLURM_ARRAY_JOB_ID"
+echo "Task ID when executing array job: \$SLURM_ARRAY_TASK_ID"
+echo "Job name: \$SLURM_JOB_NAME"
+echo "Name of nodes allocated to the job: \$SLURM_JOB_NODELIST"
+echo "Number of nodes allocated to the job: \$SLURM_JOB_NUM_NODES"
+echo "Index of executing node in node: \$SLURM_LOCALID"
+echo "Index relative to the node allocated to the job: \$SLURM_NODEID"
+echo "Number of processes for the job: \$SLURM_NTASKS"
+echo "Index of tasks for the job: \$SLURM_PROCID"
+echo "Submit directory: \$SLURM_SUBMIT_DIR"
+echo "Source host: \$SLURM_SUBMIT_HOST"
+echo "--------------------------------------------------------------------------------------"
 
-echo ------------------------------------------------------
-echo PBS_O_HOST: \$PBS_O_HOST
-echo PBS_O_QUEUE: \$PBS_O_QUEUE
-echo PBS_QUEUE: \$PBS_O_QUEUE
-echo PBS_ENVIRONMENT: \$PBS_ENVIRONMENT
-echo PBS_O_HOME: \$PBS_O_HOME
-echo PBS_O_PATH: \$PBS_O_PATH
-echo PBS_JOBNAME: \$PBS_JOBNAME
-echo PBS_JOBID: \$PBS_JOBID
-echo PBS_ARRAYID: \$PBS_ARRAYID
-echo PBS_O_WORKDIR: \$PBS_O_WORKDIR
-echo PBS_NODEFILE: \$PBS_NODEFILE
-echo PBS_NUM_PPN: \$PBS_NUM_PPN
-echo ------------------------------------------------------
-echo WORKDIR: \$WORKDIR
-echo SOURCEDIR: \$SOURCEDIR
-echo ------------------------------------------------------
-echo "This job is allocated on '\${NCPU}' cpu(s) on \$NNODES"
-echo "Job is running on node(s):"
-cat \$PBS_NODEFILE
+# Keep track of the execution progress of the job script.
+set -x
+
+DATE=\$(date)
+
 echo ------------------------------------------------------
 echo Start date: \$DATE
 echo ------------------------------------------------------
 
-# In case module command is not available
-source /etc/profile.d/modules.sh
-
-# Here required modules are loaded and environment variables are set
-module load qchem
+# Source the script that sets the paths and environment variables for QChem.
+source /opt/qchem/qchem_environment.sh
 
 # Calculations are performed in the user's scratch 
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-tmp}
+tmpdir=\${SCRATCH:-/tmp}
 jobdir=\$tmpdir/\${SLURM_JOB_ID}
 
 # scratch folder on compute node

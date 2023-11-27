@@ -3,7 +3,7 @@
 # To submit a BAGEL input file `molecule.json` to 4 processors
 # using 10Gb of memory run
 #
-#   run_bagel.sh  molecule.json  4   10Gb
+#   run_bagel.sh  molecule.json  4   10G
 #
 
 if [ ! -f "$1" ]
@@ -19,7 +19,7 @@ then
     echo "    whereas all other files are copied back from the node only after the calculation "
     echo "    has finished."
     echo " "
-    echo "  Example:  $(basename $0)  molecule.json 16  40Gb"
+    echo "  Example:  $(basename $0)  molecule.json 16  40G"
     echo " "
     exit 
 fi
@@ -33,7 +33,7 @@ name=$(basename $job .json)
 # number of processors (defaults to 1)
 nproc=${2:-1}
 # memory (defaults to 6Gb)
-mem=${3:-6Gb}
+mem=${3:-6G}
 # directory where the input script resides, this were the output
 # will be written to as well.
 rundir=$(dirname $job)
@@ -54,13 +54,15 @@ done
 
 echo "submitting '$job' (using $nproc processors and $mem of memory)"
 
-# submit to PBS queue
-#qsub <<EOF
+# The submit script is sent directly to stdin of qsub. Note
+# that all '$' signs have to be escaped ('\$') inside the HERE-document.
 # submit to slurm queue
-sbatch $options <<EOF
+sbatch $sbatch_options <<EOF
 #!/bin/bash
 
 # for Slurm
+## BAGEL is only installed on bukka-calc
+#SBATCH --nodelist=bukka-calc
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=${nproc}
@@ -68,41 +70,35 @@ sbatch $options <<EOF
 #SBATCH --job-name=${name}
 #SBATCH --output=${err}
 
-#NCPU=\$(wc -l < \$PBS_NODEFILE)
-NNODES=\$(uniq \$PBS_NODEFILE | wc -l)
-DATE=\$(date)
-SERVER=\$PBS_O_HOST
-SOURCEDIR=\${PBS_O_WORKDIR}
+echo "----- SLURM environment variables ------------------------------------------------------"
+echo "number of Cores/Node: \$SLURM_CPUS_ON_NODE"
+echo "number of Physical cores per task: \$SLURM_DPC_CPUS"
+echo "number of Logical cores per task (twice the value of the physical core): \$SLURM_CPUS_PER_TASK"
+echo "Job ID: \$SLURM_JOB_ID"
+echo "Parent job ID when executing array job: \$SLURM_ARRAY_JOB_ID"
+echo "Task ID when executing array job: \$SLURM_ARRAY_TASK_ID"
+echo "Job name: \$SLURM_JOB_NAME"
+echo "Name of nodes allocated to the job: \$SLURM_JOB_NODELIST"
+echo "Number of nodes allocated to the job: \$SLURM_JOB_NUM_NODES"
+echo "Index of executing node in node: \$SLURM_LOCALID"
+echo "Index relative to the node allocated to the job: \$SLURM_NODEID"
+echo "Number of processes for the job: \$SLURM_NTASKS"
+echo "Index of tasks for the job: \$SLURM_PROCID"
+echo "Submit directory: \$SLURM_SUBMIT_DIR"
+echo "Source host: \$SLURM_SUBMIT_HOST"
+echo "--------------------------------------------------------------------------------------"
 
-echo ------------------------------------------------------
-echo PBS_O_HOST: \$PBS_O_HOST
-echo PBS_O_QUEUE: \$PBS_O_QUEUE
-echo PBS_QUEUE: \$PBS_O_QUEUE
-echo PBS_ENVIRONMENT: \$PBS_ENVIRONMENT
-echo PBS_O_HOME: \$PBS_O_HOME
-echo PBS_O_PATH: \$PBS_O_PATH
-echo PBS_JOBNAME: \$PBS_JOBNAME
-echo PBS_JOBID: \$PBS_JOBID
-echo PBS_ARRAYID: \$PBS_ARRAYID
-echo PBS_O_WORKDIR: \$PBS_O_WORKDIR
-echo PBS_NODEFILE: \$PBS_NODEFILE
-echo PBS_NUM_PPN: \$PBS_NUM_PPN
-echo ------------------------------------------------------
-echo WORKDIR: \$WORKDIR
-echo SOURCEDIR: \$SOURCEDIR
-echo ------------------------------------------------------
-echo "This job is allocated on '\${NCPU}' cpu(s) on \$NNODES"
-echo "Job is running on node(s):"
-cat \$PBS_NODEFILE
+# Keep track of the execution progress of the job script.
+set -x
+
+DATE=\$(date)
+
 echo ------------------------------------------------------
 echo Start date: \$DATE
 echo ------------------------------------------------------
 
-# Sometimes the module command is not available, load it.
-source /etc/profile.d/modules.sh
-
-# Here required modules are loaded and environment variables are set
-module load bagel
+# Source the script that sets the paths and environment variables for BAGEL.
+source /opt/bagel/bagel_environment.sh
 
 # parallelization
 export BAGEL_NUM_THREADS=${nproc}
@@ -116,7 +112,7 @@ out=\$(dirname \$in)/\$(basename \$in .json).out
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-tmp}
+tmpdir=\${SCRATCH:-/tmp}
 jobdir=\$tmpdir/\${SLURM_JOB_ID}
 
 mkdir -p \$jobdir
