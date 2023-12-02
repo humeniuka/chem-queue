@@ -3,7 +3,7 @@
 # To submit a TeraChem input file `molecule.inp` to 2 GPUs
 # using 6Gb of memory per GPU run
 #
-#   run_terachem.sh  molecule.inp   2   6Gb
+#   run_terachem.sh  molecule.inp   2   6G
 #
 
 if [ ! -f "$1" ]
@@ -19,7 +19,7 @@ then
     echo "    whereas all other files are copied back from the node only after the calculation "
     echo "    has finished."
     echo " "
-    echo "  Example:  $(basename $0)  molecule.inp  2  6Gb"
+    echo "  Example:  $(basename $0)  molecule.inp  2  6G"
     echo " "
     exit 
 fi
@@ -32,8 +32,8 @@ err=$(dirname $job)/$(basename $job .inp).err
 name=$(basename $job .inp)
 # number of processors (defaults to 1)
 ngpu=${2:-1}
-# memory (defaults to 48Gb)
-mem=${3:-48Gb}
+# memory (defaults to 6Gb)
+mem=${3:-6G}
 # directory where the input script resides, this were the output
 # will be written to as well.
 rundir=$(dirname $job)
@@ -58,30 +58,43 @@ done
 sbatch $options <<EOF
 #!/bin/bash
 
-## for Slurm
-#SBATCH --nodes=1
-#SBATCH --cpus-per-task=${ngpu}
-#SBATCH --ntasks-per-node=1
-##SBATCH --mem-per-gpu=${mem}
-##SBATCH --mem-per-cpu=${mem}
+# ===== SLURM options ======
+# Specify job queue (partition)
+#SBATCH -p ${SBATCH_PARTITION:-gr10564g}
+# Time limit of 2 days
+#SBATCH -t 2-0:0:0
+# Request resources
+# see https://web.kudpc.kyoto-u.ac.jp/manual/en/run/resource
+#SBATCH --rsc g=${ngpu}:m=${mem}
+
 #SBATCH --job-name=${name}
+#SBATCH --error=${err}
 #SBATCH --output=${err}
-## TeraChem requires a GPU
-#SBATCH --gres=gpu:${ngpu}
-##SBATCH --gpus=${ngpu}
-#SBATCH --time=48:00:00
+# ==========================
+
+echo "----- SLURM environment variables ------------------------------------------------------"
+echo "number of Cores/Node: \$SLURM_CPUS_ON_NODE"
+echo "number of Physical cores per task: \$SLURM_DPC_CPUS"
+echo "number of Logical cores per task (twice the value of the physical core): \$SLURM_CPUS_PER_TASK"
+echo "Job ID: \$SLURM_JOB_ID"
+echo "Parent job ID when executing array job: \$SLURM_ARRAY_JOB_ID"
+echo "Task ID when executing array job: \$SLURM_ARRAY_TASK_ID"
+echo "Job name: \$SLURM_JOB_NAME"
+echo "Name of nodes allocated to the job: \$SLURM_JOB_NODELIST"
+echo "Number of nodes allocated to the job: \$SLURM_JOB_NUM_NODES"
+echo "Index of executing node in node: \$SLURM_LOCALID"
+echo "Index relative to the node allocated to the job: \$SLURM_NODEID"
+echo "Number of processes for the job: \$SLURM_NTASKS"
+echo "Index of tasks for the job: \$SLURM_PROCID"
+echo "Submit directory: \$SLURM_SUBMIT_DIR"
+echo "Source host: \$SLURM_SUBMIT_HOST"
+echo "--------------------------------------------------------------------------------------"
+
+# Keep track of the execution progress of the job script.
+set -x
 
 DATE=\$(date)
 
-echo ------------------------------------------------------
-echo SLURM_SUBMIT_HOST: \$SLURM_SUBMIT_HOST
-echo SLURM_JOB_NAME: \$SLURM_JOB_NAME
-echo SLURM_JOB_ID: \$SLURM_JOB_ID
-echo SLURM_SUBMIT_DIR: \$SLURM_SUBMIT_DIR
-echo SLURM_CPUS_ON_NODE: \$SLURM_CPUS_ON_NODE
-echo ------------------------------------------------------
-echo "Job is running on node(s):"
-echo " \$SLURM_NODELIST "
 echo CUDA_VISIBLE_DEVICES: \$CUDA_VISIBLE_DEVICES
 echo ------------------------------------------------------
 echo User        : \$USER
@@ -94,7 +107,7 @@ echo ------------------------------------------------------
 source /etc/profile.d/modules.sh
 
 # Here required modules are loaded and environment variables are set
-#module load terachem/qmmm2epol
+source ~/software/terachem/terachem_environment.sh
 
 # Input and log-file are not copied to the scratch directory.
 in=${job}
@@ -104,7 +117,7 @@ out=\$(dirname \$in)/\$(basename \$in .inp).out
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-/scratch}
+tmpdir=\${SCRATCH:-/tmp}
 jobdir=\$tmpdir/\${SLURM_JOB_ID}
 
 mkdir -p \$jobdir
@@ -147,10 +160,8 @@ done
 
 cd \$jobdir
 
-### DEBUG
 echo "Files in scratch folder:"
 ls -ltah *
-###
 
 echo "Calculation is performed in the scratch folder"
 echo "   \$(hostname):\$jobdir"
@@ -158,7 +169,7 @@ echo "   \$(hostname):\$jobdir"
 echo "TeraChem executable: \$(which terachem)"
 
 echo "Running TeraChem ..."
-terachem \$in &> \$out
+srun terachem \$in &> \$out
 
 # Did the job finish successfully ?
 failure=\$(tail -n 20 \$out | grep "DIE called")

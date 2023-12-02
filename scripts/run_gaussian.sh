@@ -86,10 +86,12 @@ sbatch $options <<EOF
 
 # ===== SLURM options ======
 # Specify job queue (partition)
-##SBATCH -p ${SBATCH_PARTITION:-eb}
+#SBATCH -p ${SBATCH_PARTITION:-gr10564b}
+# Time limit of 7 days
+#SBATCH -t 7-0:0:0
 # Request resources
 # see https://web.kudpc.kyoto-u.ac.jp/manual/en/run/resource
-#SBATCH --rsc p=1:c=${ncore}:t=$(expr ${ncore} \* 2):m=${mem}
+#SBATCH --rsc p=1:c=${ncore}:t=${ncore}:m=${mem}
 
 #SBATCH --job-name=${name}
 #SBATCH --error=${err}
@@ -135,7 +137,7 @@ out=\$(dirname \$in)/\$(basename \$in .gjf).out
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-tmp}
+tmpdir=\${SCRATCH:-/tmp}
 jobdir=\$tmpdir/\${SLURM_JOB_ID}
 
 mkdir -p \$jobdir
