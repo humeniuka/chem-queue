@@ -3,7 +3,7 @@
 # To submit a TeraChem input file `molecule.inp` to 2 GPUs
 # using 6Gb of memory per GPU run
 #
-#   run_terachem.sh  molecule.inp   2   6Gb
+#   run_terachem.sh  molecule.inp   2   6G
 #
 
 if [ ! -f "$1" ]
@@ -19,7 +19,7 @@ then
     echo "    whereas all other files are copied back from the node only after the calculation "
     echo "    has finished."
     echo " "
-    echo "  Example:  $(basename $0)  molecule.inp  2  6Gb"
+    echo "  Example:  $(basename $0)  molecule.inp  2  6G"
     echo " "
     exit 
 fi
@@ -30,10 +30,10 @@ job=$(readlink -f $1)
 err=$(dirname $job)/$(basename $job .inp).err
 # name of the job which is shown in the queueing table
 name=$(basename $job .inp)
-# number of processors (defaults to 1)
+# number of GPUs (defaults to 1)
 ngpu=${2:-1}
-# memory (defaults to 48Gb)
-mem=${3:-48Gb}
+# memory (defaults to 1.875G)
+mem=${3:-1.875G}
 # directory where the input script resides, this were the output
 # will be written to as well.
 rundir=$(dirname $job)
@@ -49,39 +49,56 @@ do
     fi
 done
 
+# Each GPU node of typeG has 1.854 Gb of memory. It is not possible to
+# request memory independently. The available memory is proportional
+# to the number of cores. Therefore the required number of cores
+# is calculated from the required amount of memory as
+#   cores = (memory / memory-per-core)
+# See
+#   https://ccportal.ims.ac.jp/en/QuickStart#buildrun_parallel
+memory_per_core=1.875
+
+ncore=$(python <<EOF
+import numpy
+memory="$mem".lower()
+if "m" in memory:
+   memory = memory.replace("m", "")
+   memory = float(memory) / 1024.0
+else:
+   memory=memory.replace("g", "")
+   memory = float(memory)
+ncore=int(numpy.ceil(memory / $memory_per_core))
+print(ncore)
+EOF
+)
+
 # The submit script is sent directly to stdin of qsub. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
 
->&2 echo "submitting '$job' (using $ngpu GPUs and $mem of memory)"
+>&2 echo "submitting '$job' (using $ngpu GPUs, $ncore cores and $mem of memory)"
 
-# submit to SLURM queue
-sbatch $options <<EOF
+# submit to PBS queue
+# RCCS has its own version of qsub which is called jsub and
+# unfortunately cannot read the script from stdin.
+# Therefore we have to create script first.
+cat <<EOF > ${name}.jsub
 #!/bin/bash
 
-## for Slurm
-#SBATCH --nodes=1
-#SBATCH --cpus-per-task=${ngpu}
-#SBATCH --ntasks-per-node=1
-##SBATCH --mem-per-gpu=${mem}
-##SBATCH --mem-per-cpu=${mem}
-#SBATCH --job-name=${name}
-#SBATCH --output=${err}
-## TeraChem requires a GPU
-#SBATCH --gres=gpu:${ngpu}
-##SBATCH --gpus=${ngpu}
-#SBATCH --time=48:00:00
+#PBS -l select=1:ncpus=${ncore}:mpiprocs=1:ompthreads=${ncore}:jobtype=gpu:ngpus=${ngpu}
+#PBS -l walltime=24:00:00
+#PBS -joe
+#PBS -o ${err}
+#PBS -e ${err}
+#PBS -N ${name}
+
+# Go to the parent folder of the script.
+cd ${rundir}
 
 DATE=\$(date)
 
 echo ------------------------------------------------------
-echo SLURM_SUBMIT_HOST: \$SLURM_SUBMIT_HOST
-echo SLURM_JOB_NAME: \$SLURM_JOB_NAME
-echo SLURM_JOB_ID: \$SLURM_JOB_ID
-echo SLURM_SUBMIT_DIR: \$SLURM_SUBMIT_DIR
-echo SLURM_CPUS_ON_NODE: \$SLURM_CPUS_ON_NODE
-echo ------------------------------------------------------
 echo "Job is running on node(s):"
-echo " \$SLURM_NODELIST "
+echo " \$PBS_NODELIST "
 echo CUDA_VISIBLE_DEVICES: \$CUDA_VISIBLE_DEVICES
 echo ------------------------------------------------------
 echo User        : \$USER
@@ -90,11 +107,8 @@ echo ------------------------------------------------------
 echo Start date  : \$DATE
 echo ------------------------------------------------------
 
-# Sometimes the module command is not available, load it.
-source /etc/profile.d/modules.sh
-
-# Here required modules are loaded and environment variables are set
-#module load terachem/qmmm2epol
+# Set environment for TeraChem
+source /home/users/eed/software/terachem/terachem_environment.sh
 
 # Input and log-file are not copied to the scratch directory.
 in=${job}
@@ -104,8 +118,8 @@ out=\$(dirname \$in)/\$(basename \$in .inp).out
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-/scratch}
-jobdir=\$tmpdir/\${SLURM_JOB_ID}
+tmpdir=\${SCRATCH:-/gwork/users/${USER}}
+jobdir=\$tmpdir/\${PBS_JOBID}
 
 mkdir -p \$jobdir
 
@@ -116,7 +130,7 @@ function clean_up() {
     # copy all files back
     cp -rf \$jobdir/* $rundir/
     # delete temporary folder
-    rm -f \$tmpdir/\${SLURM_JOB_ID}/*
+    rm -f \$tmpdir/\${PBS_JOBID}/*
 }
 
 trap clean_up SIGHUP SIGINT SIGTERM
@@ -191,5 +205,4 @@ exit \$ret
 
 EOF
 
-# Exit code of 'sbatch --wait ...' is the output of the batch script, i.e. $ret.
-exit $?
+jsub $options ${name}.jsub
