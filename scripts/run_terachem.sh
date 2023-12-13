@@ -54,44 +54,33 @@ done
 
 >&2 echo "submitting '$job' (using $ngpu GPUs and $mem of memory)"
 
-# submit to SLURM queue
-sbatch $options <<EOF
+# submit to PBS queue
+qsub $options <<EOF
 #!/bin/bash
 
-# ===== SLURM options ======
+# ===== PBS options ======
 # Specify job queue (partition)
-#SBATCH -p ${SBATCH_PARTITION:-gr10564g}
+#PBS -q APG
 # Time limit of 2 days
-#SBATCH -t 2-0:0:0
+#PBS -l walltime=48:00:00
 # Request resources
-# see https://web.kudpc.kyoto-u.ac.jp/manual/en/run/resource
-#SBATCH --rsc g=${ngpu}:m=${mem}
-
-#SBATCH --job-name=${name}
-#SBATCH --error=${err}
-#SBATCH --output=${err}
+# 1 CPU for each GPU
+#PBS -l select=1:ncpus=${ngpu}:ngpus=${ngpu}:mem=${mem}
+# Jobname
+#PBS -N ${name}
+# Output and errors
+#PBS -j eo
+#PBS -e ${err}
+#PBS -o ${err}
 # ==========================
 
-echo "----- SLURM environment variables ------------------------------------------------------"
-echo "number of Cores/Node: \$SLURM_CPUS_ON_NODE"
-echo "number of Physical cores per task: \$SLURM_DPC_CPUS"
-echo "number of Logical cores per task (twice the value of the physical core): \$SLURM_CPUS_PER_TASK"
-echo "Job ID: \$SLURM_JOB_ID"
-echo "Parent job ID when executing array job: \$SLURM_ARRAY_JOB_ID"
-echo "Task ID when executing array job: \$SLURM_ARRAY_TASK_ID"
-echo "Job name: \$SLURM_JOB_NAME"
-echo "Name of nodes allocated to the job: \$SLURM_JOB_NODELIST"
-echo "Number of nodes allocated to the job: \$SLURM_JOB_NUM_NODES"
-echo "Index of executing node in node: \$SLURM_LOCALID"
-echo "Index relative to the node allocated to the job: \$SLURM_NODEID"
-echo "Number of processes for the job: \$SLURM_NTASKS"
-echo "Index of tasks for the job: \$SLURM_PROCID"
-echo "Submit directory: \$SLURM_SUBMIT_DIR"
-echo "Source host: \$SLURM_SUBMIT_HOST"
+echo "----- PBS environment variables ------------------------------------------------------"
+echo "Number of threads, defaulting to number of CPUs: \$NCPUS"
+echo "The job identifier assigned to the job: \$PBS_JOBID"
+echo "The name of the queue from which the job is executed: \$PBS_QUEUE"
+echo "The job-specific temporary directory for this job: \$TMPDIR"
+echo "The absolute path of directory where qsub was executed: \$PBS_O_WORKDIR"
 echo "--------------------------------------------------------------------------------------"
-
-# Keep track of the execution progress of the job script.
-set -x
 
 DATE=\$(date)
 
@@ -103,8 +92,8 @@ echo ------------------------------------------------------
 echo Start date  : \$DATE
 echo ------------------------------------------------------
 
-# Sometimes the module command is not available, load it.
-source /etc/profile.d/modules.sh
+# Go to the parent folder of the TeraChem input.
+cd ${rundir}
 
 # Here required modules are loaded and environment variables are set
 source ~/software/terachem/terachem_environment.sh
@@ -117,8 +106,8 @@ out=\$(dirname \$in)/\$(basename \$in .inp).out
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-/tmp}
-jobdir=\$tmpdir/\${SLURM_JOB_ID}
+tmpdir=\${TMPDIR:-/tmp}
+jobdir=\$tmpdir/\${PBS_JOBID}
 
 mkdir -p \$jobdir
 
@@ -129,7 +118,7 @@ function clean_up() {
     # copy all files back
     cp -rf \$jobdir/* $rundir/
     # delete temporary folder
-    rm -f \$tmpdir/\${SLURM_JOB_ID}/*
+    rm -rf \$tmpdir/\${PBS_JOBID}
 }
 
 trap clean_up SIGHUP SIGINT SIGTERM
@@ -169,7 +158,7 @@ echo "   \$(hostname):\$jobdir"
 echo "TeraChem executable: \$(which terachem)"
 
 echo "Running TeraChem ..."
-srun terachem \$in &> \$out
+terachem \$in &> \$out
 
 # Did the job finish successfully ?
 failure=\$(tail -n 20 \$out | grep "DIE called")
@@ -194,7 +183,7 @@ echo ------------------------------------------------------
 echo End date: \$DATE
 echo ------------------------------------------------------
 
-# Pass return value of TeraChem job on to the SLURM queue, this allows
+# Pass return value of TeraChem job on to the PBS queue, this allows
 # to define conditional execution of dependent jobs based on the 
 # exit code of a previous job.
 echo "exit code = \$ret"
@@ -202,5 +191,5 @@ exit \$ret
 
 EOF
 
-# Exit code of 'sbatch --wait ...' is the output of the batch script, i.e. $ret.
+# Exit code is the output of the batch script, i.e. $ret.
 exit $?
