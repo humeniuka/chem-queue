@@ -52,7 +52,7 @@ done
 # The submit script is sent directly to stdin of qsub. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
 
-echo "submitting '$job' (using $nproc processors and $mem of memory)"
+>&2 echo "submitting '$job' (using $nproc processors and $mem of memory)"
 
 # The submit script is sent directly to stdin of qsub. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
