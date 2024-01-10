@@ -57,7 +57,7 @@ done
 # The submit script is sent directly to stdin of qsub. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
 # submit to slurm queue
-sbatch $sbatch_options <<EOF
+sbatch $options <<EOF
 #!/bin/bash
 
 # for Slurm
