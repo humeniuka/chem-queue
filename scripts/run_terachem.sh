@@ -65,7 +65,7 @@ sbatch $options <<EOF
 #SBATCH -t 2-0:0:0
 # Request resources
 # see https://web.kudpc.kyoto-u.ac.jp/manual/en/run/resource
-#SBATCH --rsc g=${ngpu}:m=${mem}
+##SBATCH --rsc g=${ngpu}:m=${mem}
 
 #SBATCH --job-name=${name}
 #SBATCH --error=${err}

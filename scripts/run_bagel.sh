@@ -54,55 +54,60 @@ done
 
 echo "submitting '$job' (using $nproc processors and $mem of memory)"
 
-# submit to PBS queue
-#qsub <<EOF
-# submit to slurm queue
+# submit to SLURM queue
 sbatch $options <<EOF
 #!/bin/bash
 
-# for Slurm
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=${nproc}
-#SBATCH --mem=${mem}
+# ===== SLURM options ======
+# Specify job queue (partition)
+#SBATCH -p ${SBATCH_PARTITION:-gr10564b}
+# Time limit of 7 days
+#SBATCH -t 7-0:0:0
+# Request resources
+# see https://web.kudpc.kyoto-u.ac.jp/manual/en/run/resource
+#SBATCH --rsc p=1:c=${nproc}:t=${nproc}:m=${mem}
+
 #SBATCH --job-name=${name}
+#SBATCH --error=${err}
 #SBATCH --output=${err}
+# ==========================
 
-#NCPU=\$(wc -l < \$PBS_NODEFILE)
-NNODES=\$(uniq \$PBS_NODEFILE | wc -l)
+echo "----- SLURM environment variables ------------------------------------------------------"
+echo "number of Cores/Node: \$SLURM_CPUS_ON_NODE"
+echo "number of Physical cores per task: \$SLURM_DPC_CPUS"
+echo "number of Logical cores per task (twice the value of the physical core): \$SLURM_CPUS_PER_TASK"
+echo "Job ID: \$SLURM_JOB_ID"
+echo "Parent job ID when executing array job: \$SLURM_ARRAY_JOB_ID"
+echo "Task ID when executing array job: \$SLURM_ARRAY_TASK_ID"
+echo "Job name: \$SLURM_JOB_NAME"
+echo "Name of nodes allocated to the job: \$SLURM_JOB_NODELIST"
+echo "Number of nodes allocated to the job: \$SLURM_JOB_NUM_NODES"
+echo "Index of executing node in node: \$SLURM_LOCALID"
+echo "Index relative to the node allocated to the job: \$SLURM_NODEID"
+echo "Number of processes for the job: \$SLURM_NTASKS"
+echo "Index of tasks for the job: \$SLURM_PROCID"
+echo "Submit directory: \$SLURM_SUBMIT_DIR"
+echo "Source host: \$SLURM_SUBMIT_HOST"
+echo "--------------------------------------------------------------------------------------"
+
+# Keep track of the execution progress of the job script.
+set -x
+
 DATE=\$(date)
-SERVER=\$PBS_O_HOST
-SOURCEDIR=\${PBS_O_WORKDIR}
 
+echo CUDA_VISIBLE_DEVICES: \$CUDA_VISIBLE_DEVICES
 echo ------------------------------------------------------
-echo PBS_O_HOST: \$PBS_O_HOST
-echo PBS_O_QUEUE: \$PBS_O_QUEUE
-echo PBS_QUEUE: \$PBS_O_QUEUE
-echo PBS_ENVIRONMENT: \$PBS_ENVIRONMENT
-echo PBS_O_HOME: \$PBS_O_HOME
-echo PBS_O_PATH: \$PBS_O_PATH
-echo PBS_JOBNAME: \$PBS_JOBNAME
-echo PBS_JOBID: \$PBS_JOBID
-echo PBS_ARRAYID: \$PBS_ARRAYID
-echo PBS_O_WORKDIR: \$PBS_O_WORKDIR
-echo PBS_NODEFILE: \$PBS_NODEFILE
-echo PBS_NUM_PPN: \$PBS_NUM_PPN
+echo User        : \$USER
+echo Path        : \$PATH
 echo ------------------------------------------------------
-echo WORKDIR: \$WORKDIR
-echo SOURCEDIR: \$SOURCEDIR
-echo ------------------------------------------------------
-echo "This job is allocated on '\${NCPU}' cpu(s) on \$NNODES"
-echo "Job is running on node(s):"
-cat \$PBS_NODEFILE
-echo ------------------------------------------------------
-echo Start date: \$DATE
+echo Start date  : \$DATE
 echo ------------------------------------------------------
 
 # Sometimes the module command is not available, load it.
 source /etc/profile.d/modules.sh
 
 # Here required modules are loaded and environment variables are set
-module load bagel
+source ~/software/bagel/bagel_environment.sh
 
 # parallelization
 export BAGEL_NUM_THREADS=${nproc}
@@ -116,7 +121,7 @@ out=\$(dirname \$in)/\$(basename \$in .json).out
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-tmp}
+tmpdir=\${SCRATCH:-/tmp}
 jobdir=\$tmpdir/\${SLURM_JOB_ID}
 
 mkdir -p \$jobdir
