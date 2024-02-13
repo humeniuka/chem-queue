@@ -182,6 +182,19 @@ do
    fi
 done
 
+# For Franck-Condon calculations the checkpoint file with the
+# vibrational modes of the final state is given on a single line.
+for chkfile in \$(grep "^[^%]*\.chk" \$in)
+do
+   echo "job needs checkpoint file '\$chkfile' => copy it to scratch folder"
+   if [ -f \$chkfile ]
+   then
+      cp \$chkfile \$jobdir
+   else
+      echo "\$chkfile not found"
+   fi
+done
+
 # Go to the scratch folder and run the calculations. Checkpoint
 # files are written to the scratch folder. The log-file is written
 # directly to $out (in the global filesystem).
