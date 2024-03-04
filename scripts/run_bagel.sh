@@ -3,7 +3,7 @@
 # To submit a BAGEL input file `molecule.json` to 4 processors
 # using 10Gb of memory run
 #
-#   run_bagel.sh  molecule.json  4   10Gb
+#   run_bagel.sh  molecule.json  4   10G
 #
 
 if [ ! -f "$1" ]
@@ -19,7 +19,7 @@ then
     echo "    whereas all other files are copied back from the node only after the calculation "
     echo "    has finished."
     echo " "
-    echo "  Example:  $(basename $0)  molecule.json 16  40Gb"
+    echo "  Example:  $(basename $0)  molecule.json 16  40G"
     echo " "
     exit 
 fi
@@ -33,7 +33,7 @@ name=$(basename $job .json)
 # number of processors (defaults to 1)
 nproc=${2:-1}
 # memory (defaults to 6Gb)
-mem=${3:-6Gb}
+mem=${3:-6G}
 # directory where the input script resides, this were the output
 # will be written to as well.
 rundir=$(dirname $job)
@@ -55,45 +55,33 @@ done
 echo "submitting '$job' (using $nproc processors and $mem of memory)"
 
 # submit to PBS queue
-#qsub <<EOF
-# submit to slurm queue
-sbatch $options <<EOF
+qsub $options <<EOF
 #!/bin/bash
 
-# for Slurm
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=${nproc}
-#SBATCH --mem=${mem}
-#SBATCH --job-name=${name}
-#SBATCH --output=${err}
+# ===== PBS options ======
+# Specify job queue (partition)
+#PBS -q SMALL
+# Time limit of 12 hours
+#PBS -l walltime=12:00:00
+# Request resources
+#PBS -l select=1:ncpus=${nproc}:mem=${mem}
+# Jobname
+#PBS -N ${name}
+# Output and errors
+#PBS -j eo
+#PBS -e ${err}
+#PBS -o ${err}
+# ==========================
 
-#NCPU=\$(wc -l < \$PBS_NODEFILE)
-NNODES=\$(uniq \$PBS_NODEFILE | wc -l)
+echo "----- PBS environment variables ------------------------------------------------------"
+echo "Number of threads, defaulting to number of CPUs: \$NCPUS"
+echo "The job identifier assigned to the job: \$PBS_JOBID"
+echo "The name of the queue from which the job is executed: \$PBS_QUEUE"
+echo "The job-specific temporary directory for this job: \$TMPDIR"
+echo "The absolute path of directory where qsub was executed: \$PBS_O_WORKDIR"
+echo "--------------------------------------------------------------------------------------"
+
 DATE=\$(date)
-SERVER=\$PBS_O_HOST
-SOURCEDIR=\${PBS_O_WORKDIR}
-
-echo ------------------------------------------------------
-echo PBS_O_HOST: \$PBS_O_HOST
-echo PBS_O_QUEUE: \$PBS_O_QUEUE
-echo PBS_QUEUE: \$PBS_O_QUEUE
-echo PBS_ENVIRONMENT: \$PBS_ENVIRONMENT
-echo PBS_O_HOME: \$PBS_O_HOME
-echo PBS_O_PATH: \$PBS_O_PATH
-echo PBS_JOBNAME: \$PBS_JOBNAME
-echo PBS_JOBID: \$PBS_JOBID
-echo PBS_ARRAYID: \$PBS_ARRAYID
-echo PBS_O_WORKDIR: \$PBS_O_WORKDIR
-echo PBS_NODEFILE: \$PBS_NODEFILE
-echo PBS_NUM_PPN: \$PBS_NUM_PPN
-echo ------------------------------------------------------
-echo WORKDIR: \$WORKDIR
-echo SOURCEDIR: \$SOURCEDIR
-echo ------------------------------------------------------
-echo "This job is allocated on '\${NCPU}' cpu(s) on \$NNODES"
-echo "Job is running on node(s):"
-cat \$PBS_NODEFILE
 echo ------------------------------------------------------
 echo Start date: \$DATE
 echo ------------------------------------------------------
@@ -102,7 +90,7 @@ echo ------------------------------------------------------
 source /etc/profile.d/modules.sh
 
 # Here required modules are loaded and environment variables are set
-module load bagel
+source $HOME/software/bagel/bagel_environment.sh
 
 # parallelization
 export BAGEL_NUM_THREADS=${nproc}
@@ -116,8 +104,8 @@ out=\$(dirname \$in)/\$(basename \$in .json).out
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-tmp}
-jobdir=\$tmpdir/\${SLURM_JOB_ID}
+tmpdir=\${SCRATCH:-/tmp}
+jobdir=\$tmpdir/\${PBS_JOBID}
 
 mkdir -p \$jobdir
 
@@ -128,7 +116,7 @@ function clean_up() {
     # copy all files back
     mv \$jobdir/* $rundir/
     # delete temporary folder
-    rm -f \$tmpdir/\${SLURM_JOB_ID}/*
+    rm -f \$tmpdir/\${PBS_JOBID}/*
 }
 
 trap clean_up SIGHUP SIGINT SIGTERM
@@ -172,7 +160,7 @@ echo "Calculation is performed in the scratch folder"
 echo "   \$(hostname):\$jobdir"
 
 echo "Running BAGEL ..."
-srun --mpi=pmi2 BAGEL \$in &> \$out
+BAGEL \$in &> \$out
 
 # Did the job finish successfully ?
 failure=\$(tail -n 20 \$out | grep "ERROR")
@@ -197,7 +185,7 @@ echo ------------------------------------------------------
 echo End date: \$DATE
 echo ------------------------------------------------------
 
-# Pass return value of BAGEL job on to the SLURM queue, this allows
+# Pass return value of BAGEL job on to the PBS queue, this allows
 # to define conditional execution of dependent jobs based on the 
 # exit code of a previous job.
 echo "exit code = \$ret"
