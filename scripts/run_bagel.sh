@@ -167,6 +167,20 @@ do
     fi
 done
 
+# To facilitate the integration of BAGEL with external MD or geometry optimization programs
+# the coordinates can be imported from a simple text file using the "import" keyword.
+#   "import" : "COORDINATES.in"
+# They need to be copied to the scratch folder, too.
+for file in \$(grep "import" \$in | sed 's/"import"\\s*:\\s*//g' | sed 's/[\\",]//g')
+do
+    if [ -f \$file ]
+    then
+       echo "The job needs the restart file '\$file' => copy it to scratch folder"
+       cp \$file \$jobdir
+    fi
+done
+
+
 # Go to the scratch folder and run the calculations. Newly created
 # files are written to the scratch folder. The log-file is written
 # directly to $out (in the global filesystem).
