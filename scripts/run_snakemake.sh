@@ -44,6 +44,17 @@ do
     fi
 done
 
+# convert memory resources from Gb to Mb
+mem_mb=$(python <<EOF
+memory="$mem".lower()
+if "m" in memory:
+   mem_mb=int(memory.replace('m', '').replace('b', ''))
+elif "g" in memory:
+   mem_mb=int(memory.replace('g', '').replace('b', '')) * 1024
+print(mem_mb)
+EOF
+)
+
 # The submit script is sent directly to stdin of sbatch. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
 
@@ -82,6 +93,7 @@ echo "Number of processes for the job: \$SLURM_NTASKS"
 echo "Index of tasks for the job: \$SLURM_PROCID"
 echo "Submit directory: \$SLURM_SUBMIT_DIR"
 echo "Source host: \$SLURM_SUBMIT_HOST"
+echo "Allocated memory: ${mem_mb} Mb"
 echo "--------------------------------------------------------------------------------------"
 
 DATE=\$(date)
@@ -95,7 +107,10 @@ source ~/.bashrc
 conda activate snakemake
 
 # Run snakemake workflow
-srun snakemake --use-conda --cores ${ncore} --keep-incomplete --rerun-incomplete
+srun snakemake \
+     --use-conda --cores ${ncore} \
+     --resources mem_mb=${mem_mb} \
+     --keep-incomplete --rerun-incomplete
 
 DATE=\$(date)
 echo ------------------------------------------------------
