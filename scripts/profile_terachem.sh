@@ -59,32 +59,35 @@ done
 echo "submitting '$job' (using $ngpu GPUs and $mem of memory)"
 
 # submit to SLURM queue
-sbatch $options <<EOF
+qsub $options <<EOF
 #!/bin/bash
 
-## for Slurm
-#SBATCH --nodes=1
-#SBATCH --cpus-per-task=${ngpu}
-#SBATCH --ntasks-per-node=1
-#SBATCH --mem-per-gpu=${mem}
-#SBATCH --job-name=${name}
-#SBATCH --output=${err}
-## TeraChem requires a GPU
-#SBATCH --gres=gpu:${ngpu}
-#SBATCH --gpus=${ngpu}
-#SBATCH --time=01:00:00
+# ===== PBS options ======
+# Specify job queue (partition)
+#PBS -q APG
+# Time limit of 2 days
+#PBS -l walltime=48:00:00
+# Request resources
+# 1 CPU for each GPU
+#PBS -l select=1:ncpus=${ngpu}:ngpus=${ngpu}:mem=${mem}
+# Jobname
+#PBS -N ${name}
+# Output and errors
+#PBS -j eo
+#PBS -e ${err}
+#PBS -o ${err}
+# ==========================
+
+echo "----- PBS environment variables ------------------------------------------------------"
+echo "Number of threads, defaulting to number of CPUs: \$NCPUS"
+echo "The job identifier assigned to the job: \$PBS_JOBID"
+echo "The name of the queue from which the job is executed: \$PBS_QUEUE"
+echo "The job-specific temporary directory for this job: \$TMPDIR"
+echo "The absolute path of directory where qsub was executed: \$PBS_O_WORKDIR"
+echo "--------------------------------------------------------------------------------------"
 
 DATE=\$(date)
 
-echo ------------------------------------------------------
-echo SLURM_SUBMIT_HOST: \$SLURM_SUBMIT_HOST
-echo SLURM_JOB_NAME: \$SLURM_JOB_NAME
-echo SLURM_JOB_ID: \$SLURM_JOB_ID
-echo SLURM_SUBMIT_DIR: \$SLURM_SUBMIT_DIR
-echo SLURM_CPUS_ON_NODE: \$SLURM_CPUS_ON_NODE
-echo ------------------------------------------------------
-echo "Job is running on node(s):"
-echo " \$SLURM_NODELIST "
 echo CUDA_VISIBLE_DEVICES: \$CUDA_VISIBLE_DEVICES
 echo ------------------------------------------------------
 echo User        : \$USER
@@ -93,11 +96,11 @@ echo ------------------------------------------------------
 echo Start date  : \$DATE
 echo ------------------------------------------------------
 
-# Sometimes the module command is not available, load it.
-source /etc/profile.d/modules.sh
+# Go to the parent folder of the TeraChem input.
+cd ${rundir}
 
 # Here required modules are loaded and environment variables are set
-module load terachem/qmmm2epol
+source ~/software/terachem/terachem_environment.sh
 
 # Input and log-file are not copied to the scratch directory.
 in=${job}
@@ -107,8 +110,8 @@ out=\$(dirname \$in)/\$(basename \$in .inp).out
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-/scratch}
-jobdir=\$tmpdir/\${SLURM_JOB_ID}
+tmpdir=\${TMPDIR:-/tmp}
+jobdir=\$tmpdir/\${PBS_JOBID}
 
 mkdir -p \$jobdir
 
@@ -117,9 +120,9 @@ mkdir -p \$jobdir
 
 function clean_up() {
     # copy all files back
-    mv \$jobdir/* $rundir/
+    cp -rf \$jobdir/* $rundir/
     # delete temporary folder
-    rm -f \$tmpdir/\${SLURM_JOB_ID}/*
+    rm -rf \$tmpdir/\${PBS_JOBID}
 }
 
 trap clean_up SIGHUP SIGINT SIGTERM
@@ -133,8 +136,14 @@ do
     required=\$(grep "\$file" \$in)
     if [ ! "\$required" == "" ]
     then
-       echo "The job needs the file '\$file' => copy it to scratch folder"
-       cp \$file \$jobdir
+       echo "The job needs the file or directory '\$file' => copy it to scratch folder"
+       if [ -L "\$file" ] && [ -f "\$file" ] 
+       then
+          # If file is a symbolic link, copy the file not the link
+          cp \$file \$jobdir
+       else
+          cp -r \$file \$jobdir
+       fi
     fi
 done
 
@@ -143,6 +152,9 @@ done
 # directly to \$out (in the global filesystem).
 
 cd \$jobdir
+
+echo "Files in scratch folder:"
+ls -ltah *
 
 echo "Calculation is performed in the scratch folder"
 echo "   \$(hostname):\$jobdir"
