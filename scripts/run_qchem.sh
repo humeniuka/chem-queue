@@ -5,10 +5,6 @@
 #
 #   run_qchem.sh  water.in  4   10Gb
 #
-# To submit to a specifiy SLURM queue you can set the environment variable
-# SBATCH_PARTITION before executing this script, e.g.
-#
-#   SBATCH_PARTITION=fux  run_qchem.sh molecule.gjf 4 10Gb
 #
 
 show_help() {
@@ -24,29 +20,14 @@ show_help() {
     exit 1
 }
 
-# Additional options for sbatch must precede all arguments
-sbatch_options=""
-while :; do
-    case $1 in
-	-h|--help)
-	    show_help
-	    ;;
-	-w|--wait)
-	    # Wait for the job to finish and return exit code 1 if the
-	    # calculation failed and 0 if it succeded.
-	    echo "Script will hang until the job finishes."
-	    sbatch_options="${sbatch_options} --wait"
-	    shift
-	    ;;
-	--)
-	    # end of options
-	    shift
-	    break
-	    ;;
-	*)
-	    # default case
-	    break
-    esac
+# All options are passed to qsub
+options=""
+for var in "$@"
+do
+    if [ "$(echo $var | grep "^-")" != "" ]
+    then
+	options="$options $var"
+    fi
 done
 
 if [ ! -f "$1" ]
@@ -73,50 +54,38 @@ echo "submitting '$job' (using $nproc processors and $mem of memory)"
 # The submit script is sent directly to stdin of qsub. Note
 # that all '$' signs have to be escaped ('\$') inside the HERE-document.
 # submit to PBS queue
-#qsub <<EOF
-# submit to slurm queue
-sbatch $sbatch_options <<EOF
+qsub $options <<EOF
 #!/bin/bash
 
-# for Slurm
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=${nproc}
-#SBATCH --mem=${mem}
-#SBATCH --job-name=${name}
-#SBATCH --output=${err}
+# ===== PBS options ======
+# Specify job queue (partition)
+#PBS -q SMALL
+# Time limit of 12 hours
+#PBS -l walltime=12:00:00
+# Request resources
+#PBS -l select=1:ncpus=${nproc}:mem=${mem}
+# Jobname
+#PBS -N ${name}
+# Output and errors
+#PBS -j eo
+#PBS -e ${err}
+#PBS -o ${err}
+# ==========================
 
-#NCPU=\$(wc -l < \$PBS_NODEFILE)
-NNODES=\$(uniq \$PBS_NODEFILE | wc -l)
+echo "----- PBS environment variables ------------------------------------------------------"
+echo "Number of threads, defaulting to number of CPUs: \$NCPUS"
+echo "The job identifier assigned to the job: \$PBS_JOBID"
+echo "The name of the queue from which the job is executed: \$PBS_QUEUE"
+echo "The job-specific temporary directory for this job: \$TMPDIR"
+echo "The absolute path of directory where qsub was executed: \$PBS_O_WORKDIR"
+echo "--------------------------------------------------------------------------------------"
+
 DATE=\$(date)
-SERVER=\$PBS_O_HOST
-SOURCEDIR=\${PBS_O_WORKDIR}
-
-echo ------------------------------------------------------
-echo PBS_O_HOST: \$PBS_O_HOST
-echo PBS_O_QUEUE: \$PBS_O_QUEUE
-echo PBS_QUEUE: \$PBS_O_QUEUE
-echo PBS_ENVIRONMENT: \$PBS_ENVIRONMENT
-echo PBS_O_HOME: \$PBS_O_HOME
-echo PBS_O_PATH: \$PBS_O_PATH
-echo PBS_JOBNAME: \$PBS_JOBNAME
-echo PBS_JOBID: \$PBS_JOBID
-echo PBS_ARRAYID: \$PBS_ARRAYID
-echo PBS_O_WORKDIR: \$PBS_O_WORKDIR
-echo PBS_NODEFILE: \$PBS_NODEFILE
-echo PBS_NUM_PPN: \$PBS_NUM_PPN
-echo ------------------------------------------------------
-echo WORKDIR: \$WORKDIR
-echo SOURCEDIR: \$SOURCEDIR
-echo ------------------------------------------------------
-echo "This job is allocated on '\${NCPU}' cpu(s) on \$NNODES"
-echo "Job is running on node(s):"
-cat \$PBS_NODEFILE
 echo ------------------------------------------------------
 echo Start date: \$DATE
 echo ------------------------------------------------------
 
-# In case module command is not available
+# Sometimes the module command is not available, load it.
 source /etc/profile.d/modules.sh
 
 # Here required modules are loaded and environment variables are set
@@ -126,8 +95,8 @@ module load qchem
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-tmp}
-jobdir=\$tmpdir/\${SLURM_JOB_ID}
+tmpdir=\${SCRATCH:-/tmp}
+jobdir=\$tmpdir/\${PBS_JOBID}
 
 # scratch folder on compute node
 export QCSCRATCH=\${jobdir}
@@ -142,7 +111,7 @@ function clean_up() {
     # move checkpoint files back
     mv \$jobdir/* $rundir/
     # delete temporary folder
-    rm -f \$tmpdir/\${SLURM_JOB_ID}/*
+    rm -f \$tmpdir/\${PBS_JOBID}/*
 }
 
 trap clean_up SIGHUP SIGINT SIGTERM

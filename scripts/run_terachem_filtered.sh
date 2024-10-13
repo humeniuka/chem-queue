@@ -122,17 +122,19 @@ jobdir=\$tmpdir/\${PBS_JOBID}
 
 mkdir -p \$jobdir
 
-# If the script receives the SIGTERM signal (because it is removed
-# using the qdel command), the intermediate results are copied back.
-
-function clean_up() {
-    # copy all files back
-    cp -rf \$jobdir/* $rundir/
-    # delete temporary folder
-    rm -rf \$tmpdir/\${PBS_JOBID}
-}
-
-trap clean_up SIGHUP SIGINT SIGTERM
+# NOTE: Nothing is copied back from the scratch folder
+# to save space.
+## If the script receives the SIGTERM signal (because it is removed
+## using the qdel command), the intermediate results are copied back.
+#
+#function clean_up() {
+#    # copy all files back
+#    cp -rf \$jobdir/* $rundir/
+#    # delete temporary folder
+#    rm -rf \$tmpdir/\${PBS_JOBID}
+#}
+#
+#trap clean_up SIGHUP SIGINT SIGTERM
 
 # TeraChem sometimes requires additional data in external files specified via keywords,
 # which have to be copied to the scratch folder on the compute node. We go through all
@@ -188,9 +190,6 @@ fi
 # The results are copied back to the server
 # and the scratch directory is cleaned.
 echo "Copying results back ..."
-
-clean_up
-
 
 DATE=\$(date)
 echo ------------------------------------------------------
