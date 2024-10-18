@@ -1,20 +1,27 @@
 #!/bin/bash
 #
-# To submit a Q-Chem input file `water.in` to 4 processors
-# using 10G of memory run
+# To submit a Gaussian input file `molecule.gjf` to 4 processors
+# using 10Gb of memory run
 #
-#   run_qchem.sh  water.in  4   10G
+#   run_gaussian.sh  molecule.gjf  4   10G
 #
 
 show_help() {
     echo "Input script $1 does not exist!"
     echo " "
-    echo "  Usage: $(basename $0)  qchem.in  nproc  mem"
+    echo "  Usage: $(basename $0)  molecule.gjf  nproc  mem"
     echo " "
-    echo "    submits Q-Chem script qchem.in for calculation with 'nproc' processors"
+    echo "    submits Gaussian script molecule.gjf for calculation with 'nproc' processors"
     echo "    and memory 'mem'. "
     echo " "
-    echo "  Example:  $(basename $0)  qchem.in 16  40G"
+    echo "    The Gaussian log-file is written to molecule.out in the same folder,"
+    echo "    whereas the checkpoint files are copied back from the node only after the calculation "
+    echo "    has finished."
+    echo " "
+    echo "    In the Gaussian script '%Nproc=...' should be omitted, but the amount of memory still has"
+    echo "    to be specified via '%Mem=...'' ."
+    echo " "
+    echo "  Example:  $(basename $0)  molecule.gjf 16  40G"
     echo " "
     exit 1
 }
@@ -24,30 +31,33 @@ then
     show_help
 fi
 
+# input script
+job=$(readlink -f $1)
+# errors and output of submit script will be written to this file
+err=$(dirname $job)/$(basename $job .gjf).err
+# name of the job which is shown in the queueing table
+name=$(basename $job .gjf)
+# number of processors (defaults to 1)
+nproc=${2:-1}
+# memory (defaults to 6Gb)
+mem=${3:-6G}
+# directory where the input script resides, this were the output
+# will be written to as well.
+rundir=$(dirname $job)
+
 # All options (arguments starting with --) are extracted from the command
 # line and are passed on to sbatch.
 options=""
 for var in "$@"
 do
-   if [ "$(echo $var | grep "^--")" != "" ]
-   then
-	   options="$options $var"
-   fi
+    if [ "$(echo $var | grep "^--")" != "" ]
+    then
+	options="$options $var"
+    fi
 done
 
-# input script
-job=$(readlink -f $1)
-# errors and output of submit script will be written to this file
-err=$(dirname $job)/$(basename $job .in).err
-# name of the job which is shown in the queueing table
-name=$(basename $job .in)
-# number of processors (defaults to 1)
-nproc=${2:-1}
-# memory (defaults to 6Gb)
-mem=${3:-6Gb}
-# directory where the input script resides, this were the output
-# will be written to as well.
-rundir=$(dirname $job)
+# The submit script is sent directly to stdin of sbatch. Note
+# that all '$' signs have to be escaped ('\$') inside the HERE-document.
 
 echo "submitting '$job' (using $nproc processors and $mem of memory)"
 
@@ -57,8 +67,7 @@ sbatch $options <<EOF
 
 # for Slurm
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=${nproc}
+#SBATCH --ntasks-per-node=${nproc}
 #SBATCH --mem=${mem}
 #SBATCH --job-name=${name}
 #SBATCH --output=${err}
@@ -87,21 +96,21 @@ echo ------------------------------------------------------
 # Here required modules are loaded and environment variables are set
 source ~/.bashrc
 module purge
-module load qchem
+module load gaussian
 
 echo "Loaded modules"
 module list
+
+# Input and log-file are not copied to the scratch directory.
+in=${job}
+out=\$(dirname \$in)/\$(basename \$in .gjf).out
 
 # Calculations are performed in the user's scratch 
 # directory. For each job a directory is created
 # whose contents are later moved back to the server.
 
-tmpdir=\${SCRATCH:-tmp}
+tmpdir=\${GAUSS_SCRDIR:-tmp}
 jobdir=\$tmpdir/\${SLURM_JOB_ID}
-
-# scratch folder on compute node
-export QCSCRATCH=\${jobdir}
-export QCTMPDIR=\${jobdir}
 
 mkdir -p \$jobdir
 
@@ -109,7 +118,9 @@ mkdir -p \$jobdir
 # using the qdel command), the intermediate results are copied back.
 
 function clean_up() {
-    # move checkpoint files back
+    # remove temporary Gaussian files
+    rm -f \$jobdir/Gau-*
+    # copy checkpoint files back
     mv \$jobdir/* $rundir/
     # delete temporary folder
     rm -f \$tmpdir/\${SLURM_JOB_ID}/*
@@ -117,40 +128,52 @@ function clean_up() {
 
 trap clean_up SIGHUP SIGINT SIGTERM
 
-in=$job
-out=\$(dirname \$in)/\$(basename \$in .in).out
-
-# The QChem job might depend on other files specified with READ keyword.
-# These files have to be copied to the scratch folder to make them 
-# available to the script.
-for f in \$(grep -i "READ" \$in | sed 's/READ//gi')
+# The Gaussian job might depend on old checkpoint files specified 
+# with the %OldChk=... option. These checkpoint files have to be
+# copied to the scratch folder to make them available to the script.
+for oldchk in \$(grep -i "%oldchk" \$in | sed 's/%oldchk=//gi')
 do
-   echo "job needs file '\$f' => copy it to scratch folder"
-   if [ -f \$f ]
+   echo "job needs old checkpoint file '\$oldchk' => copy it to scratch folder"
+   if [ -f \$oldchk ]
    then
-      cp \$f \$jobdir
+      cp \$oldchk \$jobdir
    else
-      echo "\$f not found"
+      echo "\$oldchk not found"
+   fi
+done
+
+# Copy external @-files (geometries, basis sets) to the scratch folder
+for atfile in \$(grep -i "^@" \$in | sed 's/@//gi')
+do
+   echo "job needs external file '\$atfile' => copy it to scratch folder"
+   if [ -f \$atfile ]
+   then
+      cp \$atfile \$jobdir
+   else
+      echo "\$atfile not found"
    fi
 done
 
 # Go to the scratch folder and run the calculations. Checkpoint
 # files are written to the scratch folder. The log-file is written
-# directly to \$out (in the global filesystem).
+# directly to $out (in the global filesystem).
 
 cd \$jobdir
 
-echo "Running QChem ..."
-qchem -nt ${nproc} \$in \$out > qchem_env_settings
+echo "Calculation is performed in the scratch folder"
+echo "   \$(hostname):\$jobdir"
+
+echo "Running Gaussian ..."
+time g16 -p=${nproc} < \$in &> \$out
 
 # Did the job finish successfully ?
-success=\$(tail -n 20 \$out | grep "Thank you very much for using Q-Chem.")
+success=\$(tail -n 1 \$out | grep "Normal termination of Gaussian")
 if [ "\$success" ]
 then
-   echo "QChem job finished normally."
+   echo "Gaussian job finished normally."
    ret=0
 else
-   echo "QChem job failed, see \$out."
+   echo "Gaussian job failed, see \$out."
    ret=1
 fi
 
@@ -160,12 +183,13 @@ echo "Copying results back ..."
 
 clean_up
 
+
 DATE=\$(date)
 echo ------------------------------------------------------
 echo End date: \$DATE
 echo ------------------------------------------------------
 
-# Pass return value of QChem job on to the SLURM queue, this allows
+# Pass return value of Gaussian job on to the SLURM queue, this allows
 # to define conditional execution of dependent jobs based on the 
 # exit code of a previous job.
 echo "exit code = \$ret"
