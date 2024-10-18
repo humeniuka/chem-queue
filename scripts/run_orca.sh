@@ -1,27 +1,24 @@
 #!/bin/bash
 #
-# To submit a ORCA input file `molecule.inp` to 4 processors
-# using 10Gb of memory run
+# To submit a ORCA input file `molecule.inp` using 10Gb of memory run
 #
-#   run_orca.sh  molecule.inp  4   10G
+#   run_orca.sh  molecule.inp  10G
 #
 
 show_help() {
     echo "Input script $1 does not exist!"
     echo " "
-    echo "  Usage: $(basename $0)  molecule.inp  nproc  mem"
+    echo "  Usage: $(basename $0)  molecule.inp  mem"
     echo " "
-    echo "    submits ORCA script molecule.inp for calculation with 'nproc' processors"
-    echo "    and memory 'mem'. "
+    echo "    submits ORCA script molecule.inp for calculation with memory 'mem'. "
     echo " "
     echo "    The ORCA log-file is written to molecule.out in the same folder,"
     echo "    whereas all other files are copied back from the node only after the calculation "
     echo "    has finished."
     echo " "
-    echo "    The number of parallel processes should not be specified in the ORCA script."
-    echo "    A section with '%pal nproc ...' will be added automatically."
+    echo "    The number of parallel processes should be specified in the ORCA script."
     echo " "
-    echo "  Example:  $(basename $0)  molecule.inp 16  40G"
+    echo "  Example:  $(basename $0)  molecule.inp 40G"
     echo " "
     exit 1
 }
@@ -37,10 +34,8 @@ job=$(readlink -f $1)
 err=$(dirname $job)/$(basename $job .inp).err
 # name of the job which is shown in the queueing table
 name=$(basename $job .inp)
-# number of processors (defaults to 1)
-nproc=${2:-1}
 # memory (defaults to 6Gb)
-mem=${3:-6G}
+mem=${2:-6G}
 # directory where the input script resides, this were the output
 # will be written to as well.
 rundir=$(dirname $job)
@@ -56,23 +51,34 @@ do
    fi
 done
 
-# Check that there is no '%pal' section in the input script
-if [ "$(grep '%pal' $job)" != "" ]
+# Determine the number of processes to use by parsing the %pal ... end
+# section in the Orca input file.
+nproc=1
+# The number of processes can be specified in two different formats
+# in the Orca input file, either as
+#   % pal  nprocs  8  end
+# or as
+#   !PAL8
+nproc_format_1=$(grep -Poie '^%PAL[[:space:]]*nprocs[[:space:]]*\K([[:digit:]]+)' $job)
+nproc_format_2=$(grep -Poie '![[:space:]]*PAL[[:space:]]*\K([[:digit:]]+)' $job)
+
+if [ "$nproc_format_1" != "" ]
 then
-   echo "ERROR: The input script contains a %pal block."
-   echo "The number of processors specified on the %pal block will come"
-   echo "into conflict with the number of processors given on the command line."
-   echo "Please remove any %pal blocks from the input script."
-   exit -1
+   nproc=$nproc_format_1
+elif [ "$nproc_format_2" != "" ]
+then
+   nproc=$nproc_format_2
+else
+   # By default a single process is used
+   nproc=1
+   echo "WARNING:"
+   echo "    The Orca input script does not specify the number of processes."
+   echo "    Add the line '%pal nprocs 8 end' in $job to run a calculation with 8 processes."
 fi
 
-# The submit script is sent directly to stdin of sbatch. Note
-# that all '$' signs have to be escaped ('\$') inside the HERE-document.
-
-echo "submitting '$job' (using $nproc processors and $mem of memory)"
-
-# submit to slurm queue
-sbatch $options <<EOF
+# Create submission script
+# Note that all '$' signs have to be escaped ('\$') inside the HERE-document.
+cat > ${name}.job <<EOF
 #!/bin/bash
 
 # for Slurm
@@ -139,7 +145,7 @@ function clean_up() {
 trap clean_up SIGHUP SIGINT SIGTERM
 
 # Copy external xyzfile's to the scratch folder
-for xyzfile in \$(cat \$in | awk 'IGNORECASE=1; /\* xyzfile/ {print \$5}')
+for xyzfile in \$(cat \$in | awk 'BEGIN {IGNORECASE=1} /\* xyzfile/ {print \$5}')
 do
    echo "job needs external xyzfile '\$xyzfile' => copy it to scratch folder"
    if [ -f \$xyzfile ]
@@ -159,19 +165,13 @@ cd \$jobdir
 echo "Calculation is performed in the scratch folder"
 echo "   \$(hostname):\$jobdir"
 
-# Add PAL block with the number of processors specified on the command line.
-cat \$in > orca.inp
-echo "" >> orca.inp
-echo "# The parallel block below has been added automatically by the submission script." >> orca.inp
-echo "%pal nprocs ${nproc} end" >> orca.inp
-
 echo "Running ORCA ..."
 echo "Path to orca executable: \$ORCA"
-time \$ORCA orca.inp &> \$out
+time \$ORCA \$in &> \$out
 
 echo "Creating molden file ..."
 # Create a molden file for visualizing orbitals
-orca_2mkl orca -molden
+orca_2mkl ${name} -molden
 
 # Did the job finish successfully ?
 success=\$(grep "ORCA TERMINATED NORMALLY" \$out)
@@ -190,7 +190,6 @@ echo "Copying results back ..."
 
 clean_up
 
-
 DATE=\$(date)
 echo ------------------------------------------------------
 echo End date: \$DATE
@@ -203,6 +202,10 @@ echo "exit code = \$ret"
 exit \$ret
 
 EOF
+
+# submit to slurm queue
+echo "submitting '$job' (using $nproc processors and $mem of memory)"
+sbatch $options ${name}.job
 
 # Exit code of 'sbatch --wait ...' is the output of the batch script, i.e. $ret.
 exit $?
