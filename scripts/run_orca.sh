@@ -119,7 +119,8 @@ module list
 
 # Input and log-file are not copied to the scratch directory.
 in=${job}
-out=\$(dirname \$in)/\$(basename \$in .inp).out
+name=\$(basename \$in .inp)
+out=\$(dirname \$in)/\${name}.out
 
 # Calculations are performed in the user's scratch 
 # directory. For each job a directory is created
@@ -144,7 +145,7 @@ function clean_up() {
 
 trap clean_up SIGHUP SIGINT SIGTERM
 
-# Copy external xyzfile's to the scratch folder
+# Copy xyz-files needed by the job to the scratch folder
 for xyzfile in \$(cat \$in | awk 'BEGIN {IGNORECASE=1} /\* xyzfile/ {print \$5}')
 do
    # Remove quotes around filename.
@@ -158,6 +159,7 @@ do
    fi
 done
 
+# Copy Hessian files needed by the job to scratch folder.
 for hessfile in \$(cat \$in | awk '/GSHESSIAN/ {print \$2} /ESHESSIAN/ {print \$2}')
 do
    # Remove quotes around filename.
@@ -180,13 +182,15 @@ cd \$jobdir
 echo "Calculation is performed in the scratch folder"
 echo "   \$(hostname):\$jobdir"
 
+cp \$in \${name}.inp
+
 echo "Running ORCA ..."
 echo "Path to orca executable: \$ORCA"
-time \$ORCA \$in &> \$out
+time \$ORCA \${name}.inp &> \$out
 
 echo "Creating molden file ..."
 # Create a molden file for visualizing orbitals
-orca_2mkl ${name} -molden
+orca_2mkl \${name} -molden
 
 # Did the job finish successfully ?
 success=\$(grep "ORCA TERMINATED NORMALLY" \$out)
