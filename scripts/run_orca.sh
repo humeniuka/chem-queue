@@ -147,12 +147,27 @@ trap clean_up SIGHUP SIGINT SIGTERM
 # Copy external xyzfile's to the scratch folder
 for xyzfile in \$(cat \$in | awk 'BEGIN {IGNORECASE=1} /\* xyzfile/ {print \$5}')
 do
+   # Remove quotes around filename.
+   xyzfile=\$(echo \$xyzfile | tr -d '"')
    echo "job needs external xyzfile '\$xyzfile' => copy it to scratch folder"
    if [ -f \$xyzfile ]
    then
       cp \$xyzfile \$jobdir
    else
       echo "\$xyzfile not found"
+   fi
+done
+
+for hessfile in \$(cat \$in | awk '/GSHESSIAN/ {print \$2} /ESHESSIAN/ {print \$2}')
+do
+   # Remove quotes around filename.
+   hessfile=\$(echo \$hessfile | tr -d '"')
+   echo "job needs external Hessian file '\$hessfile' => copy it to scratch folder"
+   if [ -f \$hessfile ]
+   then
+      cp \$hessfile \$jobdir
+   else
+      echo "\$hessfile not found"
    fi
 done
 
