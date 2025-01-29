@@ -56,13 +56,9 @@ do
     fi
 done
 
-# The submit script is sent directly to stdin of sbatch. Note
-# that all '$' signs have to be escaped ('\$') inside the HERE-document.
-
-echo "submitting '$job' (using $nproc processors and $mem of memory)"
-
-# submit to slurm queue
-sbatch $options <<EOF
+# Create submission script
+# Note that all '$' signs have to be escaped ('\$') inside the HERE-document.
+cat > ${name}.job <<EOF
 #!/bin/bash
 
 # for Slurm
@@ -142,6 +138,19 @@ do
    fi
 done
 
+# The job might need other checkpoint files which are listed at the
+# end of the input (for instance for Franck-Condon spectra.)
+for oldchk in \$(grep "^[^%].*.\.chk" \$in)
+do
+   echo "job needs additional checkpoint file '\$oldchk' => copy it to scratch folder"
+   if [ -f \$oldchk ]
+   then
+      cp \$oldchk \$jobdir
+   else
+      echo "\$oldchk not found"
+   fi
+done
+
 # Copy external @-files (geometries, basis sets) to the scratch folder
 for atfile in \$(grep -i "^@" \$in | sed 's/@//gi')
 do
@@ -196,6 +205,10 @@ echo "exit code = \$ret"
 exit \$ret
 
 EOF
+
+# submit to slurm queue
+>&2 echo "submitting '$job' (using $nproc processors and $mem of memory)"
+sbatch $options ${name}.job
 
 # Exit code of 'sbatch --wait ...' is the output of the batch script, i.e. $ret.
 exit $?

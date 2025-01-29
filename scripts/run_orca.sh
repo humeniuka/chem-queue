@@ -59,8 +59,8 @@ nproc=1
 #   % pal  nprocs  8  end
 # or as
 #   !PAL8
-nproc_format_1=$(grep -Poie '^%PAL[[:space:]]*nprocs[[:space:]]*\K([[:digit:]]+)' $job)
-nproc_format_2=$(grep -Poie '![[:space:]]*PAL[[:space:]]*\K([[:digit:]]+)' $job)
+nproc_format_1=$(grep -Poie '^%PAL[[:space:]]*nprocs[[:space:]]*\K([[:digit:]]+)' $job | tail -n 1)
+nproc_format_2=$(grep -Poie '![[:space:]]*PAL[[:space:]]*\K([[:digit:]]+)' $job | tail -n 1)
 
 if [ "$nproc_format_1" != "" ]
 then
@@ -109,10 +109,16 @@ echo ------------------------------------------------------
 echo Start date  : \$DATE
 echo ------------------------------------------------------
 
+cd \$SLURM_SUBMIT_DIR
+
 # Here required modules are loaded and environment variables are set
 source ~/.bashrc
 module purge
 module load orca/6.0
+module load xtb
+
+# This should be put into the modulefile for orca/6.0
+export XTBEXE=\$(which xtb)
 
 echo "Loaded modules"
 module list
@@ -146,7 +152,7 @@ function clean_up() {
 trap clean_up SIGHUP SIGINT SIGTERM
 
 # Copy xyz-files needed by the job to the scratch folder
-for xyzfile in \$(cat \$in | awk 'BEGIN {IGNORECASE=1} /\* xyzfile/ {print \$5}')
+for xyzfile in *.xyz \$(cat \$in | awk 'BEGIN {IGNORECASE=1} /\* xyzfile/ {print \$5}')
 do
    # Remove quotes around filename.
    xyzfile=\$(echo \$xyzfile | tr -d '"')
