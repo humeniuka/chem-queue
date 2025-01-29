@@ -109,6 +109,23 @@ cp \$SOURCEDIR/* \$VASP_WORKDIR/
 cp $incar \$VASP_WORKDIR/INCAR
 cd \$VASP_WORKDIR
 
+# If the script receives the SIGTERM signal (because it is removed
+# using the scancel command), the intermediate results are copied back.
+
+function clean_up() {
+    # Prepend name to output files
+    mv OUTCAR ${name}.OUTCAR
+    mv vasprun.xml ${name}.vasprun.xml
+
+    # Copy the files back
+    cp * \$SOURCEDIR
+
+    # Remove scratch folder
+    rm -r \$VASP_WORKDIR/*
+}
+
+trap clean_up SIGHUP SIGINT SIGTERM
+
 # Run VASP
 export OMP_NUM_THREADS=1
 export SRUN_CPUS_PER_TASK=\$SLURM_CPUS_PER_TASK
@@ -119,15 +136,8 @@ ret=\$?
 # Give VASP some time to finish writing all files.
 sleep 3
 
-# Prepend name to output files
-mv OUTCAR ${name}.OUTCAR
-mv vasprun.xml ${name}.vasprun.xml
-
-# Copy the files back
-cp * \$SOURCEDIR
-
-# Remove scratch folder
-rm -r \$VASP_WORKDIR/*
+# Copy results back
+clean_up
 
 DATE=\$(date)
 echo ------------------------------------------------------
