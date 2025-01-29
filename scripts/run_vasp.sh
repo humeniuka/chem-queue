@@ -121,7 +121,7 @@ function clean_up() {
     cp * \$SOURCEDIR
 
     # Remove scratch folder
-    rm -r \$VASP_WORKDIR/*
+    rm -r \$VASP_WORKDIR/
 }
 
 trap clean_up SIGHUP SIGINT SIGTERM
